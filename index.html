@@ -13,7 +13,7 @@
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:#F3EDE2}
 #app{max-width:480px;margin:0 auto;min-height:100vh}
 :root{--pine:#1E3B2A;--cream:#F3EDE2;--paper:#FDFAF5;--amber:#B87A1A;--amberlt:#F5E6C8;--ink:#1A1A1A;--slate:#5A6472;--border:#D8D0C4;--white:#FFFFFF;--err:#B33A2A;--errlt:#FDECEA;--green:#1A6B3C;--greenlt:#D4EDDA}
-.topbar{background:var(--pine);color:var(--cream);padding:14px 16px 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.18);display:flex;align-items:center;gap:12px}
+.topbar{background:var(--pine);color:var(--cream);padding:14px 16px 12px;padding-top:max(14px,env(safe-area-inset-top));position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.18);display:flex;align-items:center;gap:12px}
 .card{background:var(--paper);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden}
 .cbody{padding:14px 16px}
 .inp{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--white);font-size:16px;color:var(--ink);outline:none;-webkit-appearance:none;font-family:inherit}
