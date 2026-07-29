@@ -77,6 +77,7 @@ html{background:#1E3B2A}
 const ME={name:"Dennis Winders",line1:"12 Rogers St, Plymouth NH 03264",phone:"(603) 726-6300",venmo:"@Dennis-Winders",zelle:"denniswinders@gmail.com"};
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DEFAULT_SYNC_URL="https://script.google.com/macros/s/AKfycbzcdj0ytpXspwHteqU2-o285rqEgjXlsbwSmHoskurNFPEwYaIKCDKNim38hb_FkAA/exec";
+const DAN_EMAIL="falby.daniel@gmail.com";
 
 // ── utils ──────────────────────────────────────────────────────────────────
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -301,6 +302,7 @@ function rAddCl(a){
     +'<div class="bp"><div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
     +'<div><label class="lbl">Client Name</label><input class="inp" id="fn" type="text" value="'+esc(c.name||"")+'" placeholder="e.g. Sarah Johnson"></div>'
     +'<div><label class="lbl">Address</label><input class="inp" id="fa" type="text" value="'+esc(c.address||"")+'" placeholder="123 Main St, Holderness NH"></div>'
+    +'<div><label class="lbl">Client Email</label><input class="inp" id="fe" type="email" inputmode="email" value="'+esc(c.email||"")+'" placeholder="client@email.com"></div>'
     +'<div><label class="lbl">Base Hourly Rate ($)</label><input class="inp" id="fr" type="number" inputmode="decimal" value="'+(c.rate||65)+'"></div>'
     +(c.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
       +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
@@ -317,7 +319,7 @@ function saveCl(eid){
   const name=document.getElementById("fn").value.trim();
   if(!name){toast("Enter a client name");return;}
   const archived=eid?(window._carc||false):false;
-  const obj={name,address:document.getElementById("fa").value.trim(),rate:parseFloat(document.getElementById("fr").value)||65,archived};
+  const obj={name,address:document.getElementById("fa").value.trim(),email:document.getElementById("fe").value.trim().toLowerCase(),rate:parseFloat(document.getElementById("fr").value)||65,archived};
   if(eid){clients=clients.map(c=>c.id===eid?{...c,...obj}:c);}
   else{clients.push({id:uid(),...obj});}
   ss(K.cl,clients);go("clients");
@@ -559,8 +561,8 @@ function rInvoice(a){
   let html='<div class="topbar"><button class="back" onclick="go(\'list\',{proj:nav.proj})">&#8249;</button>'
     +'<div style="flex:1;font-size:16px;font-weight:700">Invoice Preview</div>'
     +'<div style="display:flex;gap:8px">'
+    +'<button class="bsm" style="background:var(--amber);color:white" onclick="emailInvoice()">Email</button>'
     +'<button class="bsm" style="background:rgba(255,255,255,.2);color:var(--cream)" onclick="doPDF()">PDF</button>'
-    +'<button class="bsm" style="background:var(--amber);color:white" onclick="doPrint()">Print</button>'
     +'</div></div>'
     +'<div style="padding:16px"><div style="background:white;border-radius:14px;border:1px solid var(--border);overflow:hidden">'
     +'<div style="background:var(--pine);padding:20px 22px">'
@@ -605,9 +607,7 @@ function rInvoice(a){
 }
 
 // ── PDF ────────────────────────────────────────────────────────────────────
-async function doPDF(){
-  if(!window.jspdf){toast("PDF library not loaded");return;}
-  toast("Building PDF...");
+async function buildPDFDoc(){
   const{allDays,labDays,th,lab,lumpWks,lumpHrs,lumpLab,lumpMat,allR,mat,laborTotal,tot,dr,invn,notesStr,rate,cl}=buildInvData();
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF('p','mm','letter');
@@ -682,7 +682,41 @@ async function doPDF(){
       doc.addImage(src,'JPEG',ml+(cw-iw)/2,py,iw,ih);
     });
   }
-  doc.save(invn+'.pdf');toast('PDF downloaded');
+  return{doc,invn,cl};
+}
+
+async function doPDF(){
+  if(!window.jspdf){toast("PDF library not loaded");return;}
+  toast("Building PDF...");
+  const{doc,invn}=await buildPDFDoc();
+  doc.save(invn+'.pdf');
+  toast('PDF downloaded');
+}
+
+async function emailInvoice(){
+  if(!window.jspdf){toast("PDF library not loaded");return;}
+  toast("Preparing invoice...");
+  const{doc,invn,cl}=await buildPDFDoc();
+  const blob=doc.output('blob');
+  const subject='Invoice for '+nav.proj.name+' \u2014 '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const file=new File([blob],invn+'.pdf',{type:'application/pdf'});
+
+  // iOS: use Web Share API — opens native share sheet with PDF attached
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file],title:subject});
+      return;
+    }catch(e){if(e.name==='AbortError')return;}
+  }
+
+  // Fallback: download PDF then open mailto with subject/to/bcc pre-filled
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=invn+'.pdf';
+  a.style.display='none';document.body.appendChild(a);a.click();document.body.removeChild(a);
+  const to=cl.email||'';
+  const params=['subject='+encodeURIComponent(subject),'bcc='+encodeURIComponent(DAN_EMAIL)];
+  setTimeout(()=>{ window.location.href='mailto:'+encodeURIComponent(to)+'?'+params.join('&'); },700);
+  toast('PDF saved \u2014 opening Mail');
 }
 
 // ── PRINT ──────────────────────────────────────────────────────────────────
@@ -834,15 +868,16 @@ function rSettings(a){
   a.innerHTML='<div class="topbar"><button class="back" onclick="go(\'dash\')">&#8249;</button>'
     +'<div style="flex:1;font-size:16px;font-weight:700">Sync Settings</div></div>'
     +'<div class="bp">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Google Sheets Sync</div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
-    +'<div><label class="lbl">Google Apps Script URL</label>'
+    +'<div><label class="lbl">Apps Script URL</label>'
     +'<input class="inp" id="surl" type="url" value="'+esc(syncUrl)+'" placeholder="https://script.google.com/macros/s/...">'
-    +'<div style="font-size:12px;color:var(--slate);margin-top:6px;line-height:1.5">Connects the app to your Google Sheet. The same URL works on all your devices.</div></div>'
+    +'<div style="font-size:12px;color:var(--slate);margin-top:6px;line-height:1.5">Connects the app to your Google Sheet.</div></div>'
     +'<button class="btnp" onclick="saveSyncUrl()">Save &amp; Test Connection</button>'
     +'</div></div>'
     +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">One-Time Data Push</div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
-    +'<div style="font-size:13px;color:var(--slate);line-height:1.5">If you have data on this device not yet in Sheets, push it up now. Do this once from each device you\'ve used before setting up sync.</div>'
+    +'<div style="font-size:13px;color:var(--slate);line-height:1.5">If you have data on this device not yet in Sheets, push it up now.</div>'
     +'<button class="btnp" style="background:var(--amber)" onclick="pushAll()">Push This Device\'s Data to Sheets</button>'
     +'</div></div>'
     +'</div>';
