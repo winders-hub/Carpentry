@@ -386,14 +386,16 @@ function delR(d,i){
 }
 function rRecs(d){const el=document.getElementById("recs-"+d);if(el)el.innerHTML=recsHTML(d,(wd.days[d]||{}).receipts||[]);}
 function recsHTML(d,recs){
-  return recs.map((r,i)=>'<div class="rrow"><div class="raccent"></div>'
-    +'<input class="rinp" style="flex:2" placeholder="Vendor" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)">'
+  return recs.map((r,i)=>'<div style="padding:0 14px 10px 18px">'
+    +'<div style="display:flex;gap:6px;margin-bottom:6px"><div class="raccent"></div>'
+    +'<input class="rinp" style="flex:1" placeholder="Vendor name" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
+    +'<div style="display:flex;gap:6px;padding-left:9px">'
     +'<input class="rinp" style="flex:1" type="number" inputmode="decimal" placeholder="$0.00" value="'+esc(String(r.amount||""))+'" oninput="uAmt(\''+d+'\','+i+',this.value)">'
     +(r.imgKey&&sgr(r.imgKey)
       ?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">'
-      :'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:7px 9px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
-    +'<button class="bsm" style="background:var(--errlt);color:var(--err);padding:7px 9px" onclick="delR(\''+d+'\','+i+')">&#x1F5D1;</button>'
-    +'</div>').join("");
+      :'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
+    +'<button class="bsm" style="background:var(--errlt);color:var(--err);padding:8px 12px;font-size:15px" onclick="delR(\''+d+'\','+i+')">&#x1F5D1;</button>'
+    +'</div></div>').join("");
 }
 async function pickImg(d,i){
   const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
