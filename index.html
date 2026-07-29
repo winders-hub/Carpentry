@@ -240,37 +240,48 @@ const gearBtn=()=>'<button onclick="go(\'settings\')" class="gear-btn">'
 // ── CLIENT LIST ────────────────────────────────────────────────────────────
 function rClients(a){
   const recentPids=new Set([...projects].sort((a,b)=>(b.lastOpened||"").localeCompare(a.lastOpened||"")).slice(0,3).map(p=>p.id));
+  const activeClients=clients.filter(c=>!c.archived);
+  const archivedClients=clients.filter(c=>c.archived);
+
+  const clientCard=(c)=>{
+    const cProjs=projects.filter(p=>p.clientId===c.id&&!p.archived);
+    const arcProjs=projects.filter(p=>p.clientId===c.id&&p.archived);
+    return '<div class="card">'
+      +'<div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
+      +'<div><div style="font-size:15px;font-weight:800;color:var(--ink)">'+esc(c.name)+'</div>'
+      +(c.address?'<div style="font-size:11px;color:var(--slate);margin-top:1px">'+esc(c.address)+'</div>':"")
+      +'<div style="font-size:11px;color:var(--amber);margin-top:1px;font-weight:600">'+f$(c.rate)+'/hr base rate</div></div>'
+      +'<button class="bsm" style="background:var(--paper);color:var(--slate);border:1px solid var(--border);font-size:11px" onclick="go(\'add-cl\',{ex:\''+c.id+'\'})">Edit</button></div>'
+      +(cProjs.length>0
+        ?cProjs.map(p=>'<div class="proj-row" onclick="openProj(\''+p.id+'\')">'
+          +'<div style="width:7px;height:7px;border-radius:50%;background:'+(recentPids.has(p.id)?'var(--green)':'var(--border)')+';flex-shrink:0"></div>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(p.name)+'</div>'
+          +(p.rate!==c.rate?'<div style="font-size:11px;color:var(--amber)">'+f$(p.rate)+'/hr</div>':"")+'</div>'
+          +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+          +'<button onclick="event.stopPropagation();go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;padding:2px 6px;font-size:12px">&#x22EE;</button>'
+          +'</div>').join("")
+        :'<div style="padding:10px 16px;font-size:13px;color:var(--slate);border-top:1px solid var(--border)">No active projects</div>')
+      +(arcProjs.length>0?'<div style="padding:6px 16px;font-size:11px;color:var(--slate);border-top:1px solid var(--border)">'
+        +arcProjs.map(p=>'<span onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="color:var(--slate);text-decoration:underline;cursor:pointer;margin-right:10px">&#x1F4E6; '+esc(p.name)+'</span>').join("")+'</div>':"")
+      +'<div style="padding:8px 16px;border-top:1px solid var(--border)">'
+      +'<button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button>'
+      +'</div></div>';
+  };
+
   a.innerHTML='<div class="topbar">'+dashBtn()
     +'<div style="flex:1"><div style="font-size:19px;font-weight:800">&#x1F528; Carpentry</div>'
     +'<div style="font-size:11px;color:#9BBFA9;text-transform:uppercase;letter-spacing:.4px;margin-top:1px">Dennis Winders</div></div>'
     +'<button class="bsm" style="background:var(--amber);color:white;font-size:22px;padding:3px 11px;font-weight:300" onclick="go(\'add-cl\',{ex:null})">+</button></div>'
     +'<div class="bp">'
-    +(clients.length===0
+    +(activeClients.length===0&&archivedClients.length===0
       ?'<div class="empty"><div style="font-size:40px;margin-bottom:12px">&#x1F4C1;</div><div style="font-weight:700;margin-bottom:6px">No clients yet</div><div style="font-size:13px">Tap + to create your first client</div></div>'
-      :clients.map(c=>{
-        const cProjs=projects.filter(p=>p.clientId===c.id&&!p.archived);
-        const arcProjs=projects.filter(p=>p.clientId===c.id&&p.archived);
-        return '<div class="card">'
-          +'<div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div style="font-size:15px;font-weight:800;color:var(--ink)">'+esc(c.name)+'</div>'
-          +(c.address?'<div style="font-size:11px;color:var(--slate);margin-top:1px">'+esc(c.address)+'</div>':"")
-          +'<div style="font-size:11px;color:var(--amber);margin-top:1px;font-weight:600">'+f$(c.rate)+'/hr base rate</div></div>'
-          +'<button class="bsm" style="background:var(--paper);color:var(--slate);border:1px solid var(--border);font-size:11px" onclick="go(\'add-cl\',{ex:\''+c.id+'\'})">Edit</button></div>'
-          +(cProjs.length>0
-            ?cProjs.map(p=>'<div class="proj-row" onclick="openProj(\''+p.id+'\')">'
-              +'<div style="width:7px;height:7px;border-radius:50%;background:'+(recentPids.has(p.id)?'var(--green)':'var(--border)')+';flex-shrink:0"></div>'
-              +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(p.name)+'</div>'
-              +(p.rate!==c.rate?'<div style="font-size:11px;color:var(--amber)">'+f$(p.rate)+'/hr</div>':"")+'</div>'
-              +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
-              +'<button onclick="event.stopPropagation();go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;padding:2px 6px;font-size:12px">&#x22EE;</button>'
-              +'</div>').join("")
-            :'<div style="padding:10px 16px;font-size:13px;color:var(--slate);border-top:1px solid var(--border)">No active projects</div>')
-          +(arcProjs.length>0?'<div style="padding:6px 16px;font-size:11px;color:var(--slate);border-top:1px solid var(--border)">'
-            +arcProjs.map(p=>'<span onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="color:var(--slate);text-decoration:underline;cursor:pointer;margin-right:10px">&#x1F4E6; '+esc(p.name)+'</span>').join("")+'</div>':"")
-          +'<div style="padding:8px 16px;border-top:1px solid var(--border)">'
-          +'<button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button>'
-          +'</div></div>';
-      }).join(""))+'</div>';
+      :activeClients.map(clientCard).join("")
+    )
+    +(archivedClients.length>0
+      ?'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4E6; Archived ('+archivedClients.length+')</div>'
+        +archivedClients.map(c=>'<div style="opacity:0.6">'+clientCard(c)+'</div>').join("")
+      :"")
+    +'</div>';
 }
 
 function openProj(pid){
@@ -290,6 +301,14 @@ function rAddCl(a){
     +'<div><label class="lbl">Client Name</label><input class="inp" id="fn" type="text" value="'+esc(c.name||"")+'" placeholder="e.g. Sarah Johnson"></div>'
     +'<div><label class="lbl">Address</label><input class="inp" id="fa" type="text" value="'+esc(c.address||"")+'" placeholder="123 Main St, Holderness NH"></div>'
     +'<div><label class="lbl">Base Hourly Rate ($)</label><input class="inp" id="fr" type="number" inputmode="decimal" value="'+(c.rate||65)+'"></div>'
+    +(c.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
+      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list — data is preserved</div></div>'
+      +'<label style="position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0;margin-left:12px">'
+      +'<input type="checkbox" id="carc" '+(c.archived?"checked":"")+' style="opacity:0;width:0;height:0">'
+      +'<span onclick="document.getElementById(\'carc\').click()" style="position:absolute;cursor:pointer;inset:0;background:'+(c.archived?"var(--amber)":"#ccc")+';border-radius:13px;transition:.2s">'
+      +'<span style="position:absolute;height:20px;width:20px;left:'+(c.archived?"20px":"3px")+';top:3px;background:white;border-radius:50%;transition:.2s"></span></span>'
+      +'</label></div>':"")
     +'<button class="btnp" onclick="saveCl(\''+esc(c.id||"")+'\')">'+( c.id?"Save Changes":"Create Client")+'</button>'
     +(c.id?'<button class="bsm" style="background:var(--errlt);color:var(--err);width:100%;padding:12px" onclick="delCl(\''+c.id+'\')">Delete Client</button>':"")
     +'</div></div></div>';
@@ -297,7 +316,8 @@ function rAddCl(a){
 function saveCl(eid){
   const name=document.getElementById("fn").value.trim();
   if(!name){toast("Enter a client name");return;}
-  const obj={name,address:document.getElementById("fa").value.trim(),rate:parseFloat(document.getElementById("fr").value)||65};
+  const archived=eid?document.getElementById("carc")?.checked||false:false;
+  const obj={name,address:document.getElementById("fa").value.trim(),rate:parseFloat(document.getElementById("fr").value)||65,archived};
   if(eid){clients=clients.map(c=>c.id===eid?{...c,...obj}:c);}
   else{clients.push({id:uid(),...obj});}
   ss(K.cl,clients);go("clients");
