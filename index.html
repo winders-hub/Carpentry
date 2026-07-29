@@ -296,6 +296,7 @@ function openProj(pid){
 // ── ADD / EDIT CLIENT ──────────────────────────────────────────────────────
 function rAddCl(a){
   const c=nav.ex?getCl(nav.ex):{};
+  window._carc=c.archived||false;
   a.innerHTML='<div class="topbar"><button class="back" onclick="go(\'clients\')">&#8249;</button><div style="font-size:16px;font-weight:700">'+(c.id?"Edit Client":"New Client")+'</div></div>'
     +'<div class="bp"><div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
     +'<div><label class="lbl">Client Name</label><input class="inp" id="fn" type="text" value="'+esc(c.name||"")+'" placeholder="e.g. Sarah Johnson"></div>'
@@ -304,11 +305,10 @@ function rAddCl(a){
     +(c.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
       +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
       +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list — data is preserved</div></div>'
-      +'<label style="position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0;margin-left:12px">'
-      +'<input type="checkbox" id="carc" '+(c.archived?"checked":"")+' style="opacity:0;width:0;height:0">'
-      +'<span onclick="document.getElementById(\'carc\').click()" style="position:absolute;cursor:pointer;inset:0;background:'+(c.archived?"var(--amber)":"#ccc")+';border-radius:13px;transition:.2s">'
-      +'<span style="position:absolute;height:20px;width:20px;left:'+(c.archived?"20px":"3px")+';top:3px;background:white;border-radius:50%;transition:.2s"></span></span>'
-      +'</label></div>':"")
+      +'<button id="carc-btn" onclick="window._carc=!window._carc;document.getElementById(\'carc-btn\').style.background=window._carc?\'var(--amber)\':\'#ccc\';document.getElementById(\'carc-knob\').style.left=window._carc?\'22px\':\'3px\'" '
+      +'style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._carc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
+      +'<span id="carc-knob" style="position:absolute;top:4px;left:'+(window._carc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span>'
+      +'</button></div>':"")
     +'<button class="btnp" onclick="saveCl(\''+esc(c.id||"")+'\')">'+( c.id?"Save Changes":"Create Client")+'</button>'
     +(c.id?'<button class="bsm" style="background:var(--errlt);color:var(--err);width:100%;padding:12px" onclick="delCl(\''+c.id+'\')">Delete Client</button>':"")
     +'</div></div></div>';
@@ -316,7 +316,7 @@ function rAddCl(a){
 function saveCl(eid){
   const name=document.getElementById("fn").value.trim();
   if(!name){toast("Enter a client name");return;}
-  const archived=eid?document.getElementById("carc")?.checked||false:false;
+  const archived=eid?(window._carc||false):false;
   const obj={name,address:document.getElementById("fa").value.trim(),rate:parseFloat(document.getElementById("fr").value)||65,archived};
   if(eid){clients=clients.map(c=>c.id===eid?{...c,...obj}:c);}
   else{clients.push({id:uid(),...obj});}
@@ -333,18 +333,19 @@ function delCl(id){
 function rAddProj(a){
   const p=nav.ex?getProj(nav.ex):{};
   const cl=getCl(nav.cid||(p.clientId||""));
+  window._parc=p.archived||false;
   a.innerHTML='<div class="topbar"><button class="back" onclick="go(\'clients\')">&#8249;</button><div style="font-size:16px;font-weight:700">'+(p.id?"Edit Project":"New Project")+'</div></div>'
     +'<div class="bp"><div style="font-size:12px;color:var(--slate);margin-bottom:10px">Client: <strong>'+esc(cl.name||"")+'</strong></div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
     +'<div><label class="lbl">Project Name</label><input class="inp" id="pn" type="text" value="'+esc(p.name||"")+'" placeholder="e.g. Kitchen Renovation"></div>'
     +'<div><label class="lbl">Hourly Rate ($)</label><input class="inp" id="pr" type="number" inputmode="decimal" value="'+(p.rate||cl.rate||65)+'"></div>'
     +(p.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
-      +'<span style="font-size:14px;color:var(--ink)">Archived</span>'
-      +'<label style="position:relative;display:inline-block;width:44px;height:26px">'
-      +'<input type="checkbox" id="parc" '+(p.archived?"checked":"")+' style="opacity:0;width:0;height:0">'
-      +'<span onclick="document.getElementById(\'parc\').click()" style="position:absolute;cursor:pointer;inset:0;background:'+(p.archived?"var(--amber)":"#ccc")+';border-radius:13px;transition:.2s">'
-      +'<span style="position:absolute;height:20px;width:20px;left:'+(p.archived?"20px":"3px")+';top:3px;background:white;border-radius:50%;transition:.2s"></span></span>'
-      +'</label></div>':"")
+      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list</div></div>'
+      +'<button id="arc-btn" onclick="window._parc=!window._parc;document.getElementById(\'arc-btn\').style.background=window._parc?\'var(--amber)\':\'#ccc\';document.getElementById(\'arc-knob\').style.left=window._parc?\'22px\':\'3px\'" '
+      +'style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._parc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
+      +'<span id="arc-knob" style="position:absolute;top:4px;left:'+(window._parc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span>'
+      +'</button></div>':"")
     +'<button class="btnp" onclick="saveProj(\''+esc(p.id||"")+'\',\''+esc(p.clientId||nav.cid||"")+'\')">'+( p.id?"Save Changes":"Create Project")+'</button>'
     +(p.id?'<button class="bsm" style="background:var(--errlt);color:var(--err);width:100%;padding:12px" onclick="delProj(\''+p.id+'\')">Delete Project</button>':"")
     +'</div></div></div>';
@@ -353,7 +354,7 @@ function saveProj(eid,cid){
   const name=document.getElementById("pn").value.trim();
   if(!name){toast("Enter a project name");return;}
   const rate=parseFloat(document.getElementById("pr").value)||65;
-  const archived=eid?document.getElementById("parc")?.checked||false:false;
+  const archived=eid?(window._parc||false):false;
   if(eid){projects=projects.map(p=>p.id===eid?{...p,name,rate,archived}:p);}
   else{projects.push({id:uid(),clientId:cid,name,rate,archived:false,createdAt:tod(),lastOpened:null});}
   ss(K.proj,projects);go("clients");
@@ -749,7 +750,7 @@ function calcDash(){
       const wLab=+(wh*rate).toFixed(2);
       if(ws>=ago30){h30+=wh;lab30+=wLab;mat30+=wm;}
       if(ws>=ytdStart){ytdLab+=wLab;ytdMat+=wm;}
-      if(!p.archived&&!invdSet.has(ws)&&(wh>0||wm>0)){uninv+=wLab+wm;uninvProjs.add(p.id);}
+      if(!p.archived&&!getCl(p.clientId).archived&&!invdSet.has(ws)&&(wh>0||wm>0)){uninv+=wLab+wm;uninvProjs.add(p.id);}
     });
   });
   return{h30:+h30.toFixed(2),lab30:+lab30.toFixed(2),mat30:+mat30.toFixed(2),tot30:+(lab30+mat30).toFixed(2),
