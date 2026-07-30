@@ -36,7 +36,6 @@ html{background:#1E3B2A}
 .tinp:focus{border-color:var(--pine)}
 .tdash{color:var(--slate);font-size:18px;flex-shrink:0}
 .ttot{min-width:44px;text-align:right;font-size:14px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums;flex-shrink:0}
-.rrow{display:flex;align-items:center;gap:6px;padding:0 14px 8px 18px}
 .raccent{width:3px;background:var(--border);border-radius:2px;align-self:stretch;flex-shrink:0}
 .rinp{padding:8px 9px;border-radius:9px;border:1.5px solid var(--border);background:var(--white);font-size:14px;color:var(--ink);outline:none;font-family:inherit;-webkit-appearance:none}
 .rinp:focus{border-color:var(--pine)}
@@ -68,6 +67,18 @@ html{background:#1E3B2A}
 .shortcut:active{background:#f0ece4}
 .ytd-toggle{background:none;border:none;width:100%;text-align:left;padding:12px 16px;font-size:13px;font-weight:700;color:var(--pine);cursor:pointer;font-family:inherit;display:flex;justify-content:space-between;align-items:center}
 .gear-btn{background:none;border:none;cursor:pointer;padding:4px;color:var(--cream);display:flex;align-items:center}
+/* Archived cards: direct muted colors instead of opacity wrapper (fixes color bleed bug) */
+.arc-card{background:#EDE8DE !important;border-color:#C0B8B0 !important;}
+.arc-card .proj-row{border-color:#C8C0B4;}
+.arc-card .proj-row:active{background:#E0D8CC;}
+/* Lumber-yard account toggle on receipt rows */
+.lbr-chk{width:28px;height:28px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;font-size:14px;background:var(--white);}
+.lbr-chk.on{background:var(--amber);border-color:var(--amber);color:white;}
+/* Schedule C category chips */
+.cat-chip{border:1.5px solid var(--border);border-radius:20px;padding:6px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;background:var(--white);color:var(--slate);}
+.cat-chip.sel{background:var(--pine);color:var(--cream);border-color:var(--pine);}
+/* Card pay-back rows */
+.crd-row{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;}
 </style>
 </head>
 <body>
@@ -78,6 +89,7 @@ const ME={name:"Dennis Winders",line1:"12 Rogers St, Plymouth NH 03264",phone:"(
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DEFAULT_SYNC_URL="https://script.google.com/macros/s/AKfycbzcdj0ytpXspwHteqU2-o285rqEgjXlsbwSmHoskurNFPEwYaIKCDKNim38hb_FkAA/exec";
 const DAN_EMAIL="falby.daniel@gmail.com";
+const EXP_CATS=["Tools & Equipment","Vehicle & Travel","Home Office","Materials & Supplies","Insurance","Professional Development","Other"];
 
 // ── utils ──────────────────────────────────────────────────────────────────
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -99,20 +111,15 @@ const ssr=(k,v)=>{try{localStorage.setItem(k,v);}catch{}};
 const sl=(p)=>{const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith(p))ks.push(k);}return ks;};
 
 // ── sync layer ─────────────────────────────────────────────────────────────
-// Keys that stay local-only and never sync to Sheets
 const LOCAL_ONLY=new Set(["carp-sync-url","carp-last","carp-ytd-open"]);
-
 let syncUrl=localStorage.getItem("carp-sync-url")||DEFAULT_SYNC_URL;
 if(!localStorage.getItem("carp-sync-url"))localStorage.setItem("carp-sync-url",DEFAULT_SYNC_URL);
 
 async function bgSync(action,key,value){
   if(!syncUrl)return;
   if(key.startsWith("carp-img-")||LOCAL_ONLY.has(key))return;
-  try{
-    await fetch(syncUrl,{method:"POST",redirect:"follow",body:JSON.stringify({action,key,value})});
-  }catch{}
+  try{await fetch(syncUrl,{method:"POST",redirect:"follow",body:JSON.stringify({action,key,value})});}catch{}
 }
-
 async function pullFromSheets(){
   if(!syncUrl)return false;
   try{
@@ -123,32 +130,23 @@ async function pullFromSheets(){
     const d=await r.json();
     if(d.ok&&d.data){
       Object.entries(d.data).forEach(([k,v])=>{
-        if(!k.startsWith("carp-img-")&&!LOCAL_ONLY.has(k)){
-          try{localStorage.setItem(k,v);}catch{}
-        }
+        if(!k.startsWith("carp-img-")&&!LOCAL_ONLY.has(k)){try{localStorage.setItem(k,v);}catch{}}
       });
       return true;
     }
-  }catch(e){
-    if(e.name==="AbortError")console.log("Sync timed out");
-    else console.error("Pull error:",e);
-  }
+  }catch(e){if(e.name==="AbortError")console.log("Sync timed out");else console.error("Pull error:",e);}
   return false;
 }
-
 async function pushToSheets(){
   if(!syncUrl)return false;
   const data={};
   for(let i=0;i<localStorage.length;i++){
     const k=localStorage.key(i);
-    if(k&&!k.startsWith("carp-img-")&&!LOCAL_ONLY.has(k)){
-      data[k]=localStorage.getItem(k);
-    }
+    if(k&&!k.startsWith("carp-img-")&&!LOCAL_ONLY.has(k))data[k]=localStorage.getItem(k);
   }
   try{
     const r=await fetch(syncUrl,{method:"POST",redirect:"follow",body:JSON.stringify({action:"setMany",data})});
-    const d=await r.json();
-    return d.ok;
+    const d=await r.json();return d.ok;
   }catch{return false;}
 }
 
@@ -157,7 +155,8 @@ function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{} bgSync("
 function sd(k){try{localStorage.removeItem(k);}catch{} bgSync("delete",k,null);}
 
 // ── storage keys ───────────────────────────────────────────────────────────
-const K={cl:"carp-cl",proj:"carp-proj",wk:(p,w)=>"carp-w-"+p+"__"+w,img:(i)=>"carp-img-"+i,invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open"};
+const K={cl:"carp-cl",proj:"carp-proj",wk:(p,w)=>"carp-w-"+p+"__"+w,img:(i)=>"carp-img-"+i,
+  invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open",crd:"carp-crd",exp:"carp-exp"};
 
 // ── invoiced ───────────────────────────────────────────────────────────────
 const getInvd=(pid)=>sg(K.invd(pid),[])||[];
@@ -183,32 +182,24 @@ let nav={screen:"clients"};
 let wd={days:{},notes:""};
 let saveT=null;
 let selWks=new Set();
-
 const getCl=(cid)=>clients.find(c=>c.id===cid)||{};
 const getProj=(pid)=>projects.find(p=>p.id===pid)||{};
 
 // ── migration ──────────────────────────────────────────────────────────────
 function migrate(){
-  const existingProjs=sg(K.proj,[]);
-  const cls=sg(K.cl,[]);
+  const existingProjs=sg(K.proj,[]);const cls=sg(K.cl,[]);
   if(existingProjs.length>0||cls.length===0)return;
-  const hasProjField=cls.some(c=>c.project);
-  if(!hasProjField)return;
+  const hasProjField=cls.some(c=>c.project);if(!hasProjField)return;
   const newProjs=[];
   cls.forEach(c=>{
     if(c.project){
       const pid=uid();
       newProjs.push({id:pid,clientId:c.id,name:c.project,rate:c.rate,archived:false,createdAt:tod(),lastOpened:null});
-      sl("carp-w-"+c.id+"__").forEach(oldKey=>{
-        const ws=oldKey.split("__")[1];
-        ss(K.wk(pid,ws),sg(oldKey,{days:{},notes:""}));
-      });
-      const oldInvd=sg(K.invd(c.id),[]);
-      if(oldInvd.length>0)ss(K.invd(pid),oldInvd);
+      sl("carp-w-"+c.id+"__").forEach(oldKey=>{const ws=oldKey.split("__")[1];ss(K.wk(pid,ws),sg(oldKey,{days:{},notes:""}));});
+      const oldInvd=sg(K.invd(c.id),[]);if(oldInvd.length>0)ss(K.invd(pid),oldInvd);
     }
   });
-  ss(K.proj,newProjs);
-  ss(K.cl,cls.map(c=>({id:c.id,name:c.name,address:c.address,rate:c.rate})));
+  ss(K.proj,newProjs);ss(K.cl,cls.map(c=>({id:c.id,name:c.name,address:c.address,rate:c.rate})));
 }
 
 // ── toast ──────────────────────────────────────────────────────────────────
@@ -228,15 +219,14 @@ function render(){
     case"invoice":rInvoice(a);break;
     case"dash":rDash(a);break;
     case"settings":rSettings(a);break;
+    case"expenses":rExpenses(a);break;
+    case"add-exp":rAddExp(a);break;
   }
 }
 
 // ── shared icon buttons ────────────────────────────────────────────────────
-const dashBtn=()=>'<button onclick="go(\'dash\')" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;color:var(--cream)">'
-  +'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>';
-
-const gearBtn=()=>'<button onclick="go(\'settings\')" class="gear-btn">'
-  +'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>';
+const dashBtn=()=>'<button onclick="go(\'dash\')" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;color:var(--cream)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>';
+const gearBtn=()=>'<button onclick="go(\'settings\')" class="gear-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>';
 
 // ── CLIENT LIST ────────────────────────────────────────────────────────────
 function rClients(a){
@@ -247,8 +237,7 @@ function rClients(a){
   const clientCard=(c)=>{
     const cProjs=projects.filter(p=>p.clientId===c.id&&!p.archived);
     const arcProjs=projects.filter(p=>p.clientId===c.id&&p.archived);
-    return '<div class="card">'
-      +'<div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
+    return '<div class="card'+(c.archived?' arc-card':'')+'"><div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
       +'<div><div style="font-size:15px;font-weight:800;color:var(--ink)">'+esc(c.name)+'</div>'
       +(c.address?'<div style="font-size:11px;color:var(--slate);margin-top:1px">'+esc(c.address)+'</div>':"")
       +'<div style="font-size:11px;color:var(--amber);margin-top:1px;font-weight:600">'+f$(c.rate)+'/hr base rate</div></div>'
@@ -262,11 +251,8 @@ function rClients(a){
           +'<button onclick="event.stopPropagation();go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;padding:2px 6px;font-size:12px">&#x22EE;</button>'
           +'</div>').join("")
         :'<div style="padding:10px 16px;font-size:13px;color:var(--slate);border-top:1px solid var(--border)">No active projects</div>')
-      +(arcProjs.length>0?'<div style="padding:6px 16px;font-size:11px;color:var(--slate);border-top:1px solid var(--border)">'
-        +arcProjs.map(p=>'<span onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="color:var(--slate);text-decoration:underline;cursor:pointer;margin-right:10px">&#x1F4E6; '+esc(p.name)+'</span>').join("")+'</div>':"")
-      +'<div style="padding:8px 16px;border-top:1px solid var(--border)">'
-      +'<button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button>'
-      +'</div></div>';
+      +(arcProjs.length>0?'<div style="padding:6px 16px;font-size:11px;color:var(--slate);border-top:1px solid var(--border)">'+arcProjs.map(p=>'<span onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="color:var(--slate);text-decoration:underline;cursor:pointer;margin-right:10px">&#x1F4E6; '+esc(p.name)+'</span>').join("")+'</div>':"")
+      +'<div style="padding:8px 16px;border-top:1px solid var(--border)"><button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button></div></div>';
   };
 
   a.innerHTML='<div class="topbar">'+dashBtn()
@@ -274,13 +260,15 @@ function rClients(a){
     +'<div style="font-size:11px;color:#9BBFA9;text-transform:uppercase;letter-spacing:.4px;margin-top:1px">Dennis Winders</div></div>'
     +'<button class="bsm" style="background:var(--amber);color:white;font-size:22px;padding:3px 11px;font-weight:300" onclick="go(\'add-cl\',{ex:null})">+</button></div>'
     +'<div class="bp">'
+    +'<button onclick="go(\'expenses\')" style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:11px 16px;width:100%;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;margin-bottom:14px;font-family:inherit">'
+    +'<span style="font-size:18px">&#x1F9FE;</span><span style="font-size:14px;font-weight:700;color:var(--ink)">My Business Expenses</span>'
+    +'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>'
     +(activeClients.length===0&&archivedClients.length===0
       ?'<div class="empty"><div style="font-size:40px;margin-bottom:12px">&#x1F4C1;</div><div style="font-weight:700;margin-bottom:6px">No clients yet</div><div style="font-size:13px">Tap + to create your first client</div></div>'
-      :activeClients.map(clientCard).join("")
-    )
+      :activeClients.map(clientCard).join(""))
     +(archivedClients.length>0
       ?'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4E6; Archived ('+archivedClients.length+')</div>'
-        +archivedClients.map(c=>'<div style="opacity:0.6">'+clientCard(c)+'</div>').join("")
+        +archivedClients.map(clientCard).join("")
       :"")
     +'</div>';
 }
@@ -303,14 +291,11 @@ function rAddCl(a){
     +'<div><label class="lbl">Client Name</label><input class="inp" id="fn" type="text" value="'+esc(c.name||"")+'" placeholder="e.g. Sarah Johnson"></div>'
     +'<div><label class="lbl">Address</label><input class="inp" id="fa" type="text" value="'+esc(c.address||"")+'" placeholder="123 Main St, Holderness NH"></div>'
     +'<div><label class="lbl">Client Email</label><input class="inp" id="fe" type="email" inputmode="email" value="'+esc(c.email||"")+'" placeholder="client@email.com"></div>'
-    +'<div><label class="lbl">Base Hourly Rate ($)</label><input class="inp" id="fr" type="number" inputmode="decimal" value="'+(c.rate||65)+'"></div>'
+    +'<div><label class="lbl">Base Hourly Rate ($)</label><input class="inp" id="fr" type="number" inputmode="decimal" value="'+(c.rate||45)+'"></div>'
     +(c.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
-      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
-      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list — data is preserved</div></div>'
-      +'<button id="carc-btn" onclick="window._carc=!window._carc;document.getElementById(\'carc-btn\').style.background=window._carc?\'var(--amber)\':\'#ccc\';document.getElementById(\'carc-knob\').style.left=window._carc?\'22px\':\'3px\'" '
-      +'style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._carc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
-      +'<span id="carc-knob" style="position:absolute;top:4px;left:'+(window._carc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span>'
-      +'</button></div>':"")
+      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div><div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list — data is preserved</div></div>'
+      +'<button id="carc-btn" onclick="window._carc=!window._carc;document.getElementById(\'carc-btn\').style.background=window._carc?\'var(--amber)\':\'#ccc\';document.getElementById(\'carc-knob\').style.left=window._carc?\'22px\':\'3px\'" style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._carc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
+      +'<span id="carc-knob" style="position:absolute;top:4px;left:'+(window._carc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span></button></div>':"")
     +'<button class="btnp" onclick="saveCl(\''+esc(c.id||"")+'\')">'+( c.id?"Save Changes":"Create Client")+'</button>'
     +(c.id?'<button class="bsm" style="background:var(--errlt);color:var(--err);width:100%;padding:12px" onclick="delCl(\''+c.id+'\')">Delete Client</button>':"")
     +'</div></div></div>';
@@ -319,15 +304,13 @@ function saveCl(eid){
   const name=document.getElementById("fn").value.trim();
   if(!name){toast("Enter a client name");return;}
   const archived=eid?(window._carc||false):false;
-  const obj={name,address:document.getElementById("fa").value.trim(),email:document.getElementById("fe").value.trim().toLowerCase(),rate:parseFloat(document.getElementById("fr").value)||65,archived};
-  if(eid){clients=clients.map(c=>c.id===eid?{...c,...obj}:c);}
-  else{clients.push({id:uid(),...obj});}
+  const obj={name,address:document.getElementById("fa").value.trim(),email:document.getElementById("fe").value.trim().toLowerCase(),rate:parseFloat(document.getElementById("fr").value)||45,archived};
+  if(eid){clients=clients.map(c=>c.id===eid?{...c,...obj}:c);}else{clients.push({id:uid(),...obj});}
   ss(K.cl,clients);go("clients");
 }
 function delCl(id){
   if(!confirm("Delete this client and all their projects?"))return;
-  clients=clients.filter(c=>c.id!==id);
-  projects=projects.filter(p=>p.clientId!==id);
+  clients=clients.filter(c=>c.id!==id);projects=projects.filter(p=>p.clientId!==id);
   ss(K.cl,clients);ss(K.proj,projects);go("clients");
 }
 
@@ -340,14 +323,11 @@ function rAddProj(a){
     +'<div class="bp"><div style="font-size:12px;color:var(--slate);margin-bottom:10px">Client: <strong>'+esc(cl.name||"")+'</strong></div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
     +'<div><label class="lbl">Project Name</label><input class="inp" id="pn" type="text" value="'+esc(p.name||"")+'" placeholder="e.g. Kitchen Renovation"></div>'
-    +'<div><label class="lbl">Hourly Rate ($)</label><input class="inp" id="pr" type="number" inputmode="decimal" value="'+(p.rate||cl.rate||65)+'"></div>'
+    +'<div><label class="lbl">Hourly Rate ($)</label><input class="inp" id="pr" type="number" inputmode="decimal" value="'+(p.rate||cl.rate||45)+'"></div>'
     +(p.id?'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">'
-      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div>'
-      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list</div></div>'
-      +'<button id="arc-btn" onclick="window._parc=!window._parc;document.getElementById(\'arc-btn\').style.background=window._parc?\'var(--amber)\':\'#ccc\';document.getElementById(\'arc-knob\').style.left=window._parc?\'22px\':\'3px\'" '
-      +'style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._parc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
-      +'<span id="arc-knob" style="position:absolute;top:4px;left:'+(window._parc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span>'
-      +'</button></div>':"")
+      +'<div><div style="font-size:14px;color:var(--ink)">Archived</div><div style="font-size:12px;color:var(--slate);margin-top:2px">Hidden from client list</div></div>'
+      +'<button id="arc-btn" onclick="window._parc=!window._parc;document.getElementById(\'arc-btn\').style.background=window._parc?\'var(--amber)\':\'#ccc\';document.getElementById(\'arc-knob\').style.left=window._parc?\'22px\':\'3px\'" style="position:relative;width:46px;height:28px;border-radius:14px;border:none;cursor:pointer;background:'+(window._parc?'var(--amber)':'#ccc')+';transition:background .2s;flex-shrink:0;padding:0">'
+      +'<span id="arc-knob" style="position:absolute;top:4px;left:'+(window._parc?'22px':'3px')+';width:20px;height:20px;background:white;border-radius:50%;transition:left .2s;display:block"></span></button></div>':"")
     +'<button class="btnp" onclick="saveProj(\''+esc(p.id||"")+'\',\''+esc(p.clientId||nav.cid||"")+'\')">'+( p.id?"Save Changes":"Create Project")+'</button>'
     +(p.id?'<button class="bsm" style="background:var(--errlt);color:var(--err);width:100%;padding:12px" onclick="delProj(\''+p.id+'\')">Delete Project</button>':"")
     +'</div></div></div>';
@@ -355,7 +335,7 @@ function rAddProj(a){
 function saveProj(eid,cid){
   const name=document.getElementById("pn").value.trim();
   if(!name){toast("Enter a project name");return;}
-  const rate=parseFloat(document.getElementById("pr").value)||65;
+  const rate=parseFloat(document.getElementById("pr").value)||45;
   const archived=eid?(window._parc||false):false;
   if(eid){projects=projects.map(p=>p.id===eid?{...p,name,rate,archived}:p);}
   else{projects.push({id:uid(),clientId:cid,name,rate,archived:false,createdAt:tod(),lastOpened:null});}
@@ -375,12 +355,16 @@ function rHrs(d){const el=document.getElementById("h-"+d);if(el){const x=wd.days
 function uVend(d,i,v){const day=gday(d);if(day.receipts[i])day.receipts[i].vendor=v;persist();}
 function uAmt(d,i,v){const day=gday(d);if(day.receipts[i])day.receipts[i].amount=v;persist();rSum();}
 function uNotes(v){wd.notes=v;persist();}
+function uAcct(d,i){
+  const day=gday(d);
+  if(day.receipts[i]){day.receipts[i].account=day.receipts[i].account==="lumber"?"family":"lumber";persist();rRecs(d);}
+}
 function clearDay(date){
   if(!confirm("Clear all data for "+fd(date)+"?"))return;
   if(wd.days[date]){(wd.days[date].receipts||[]).forEach(r=>{if(r.imgKey)sd(r.imgKey);});delete wd.days[date];}
   persist();rWeek(document.getElementById("app"));
 }
-function addR(d){gday(d).receipts.push({id:uid(),vendor:"",amount:"",imgKey:null});persist();rRecs(d);rSum();}
+function addR(d){gday(d).receipts.push({id:uid(),vendor:"",amount:"",imgKey:null,account:"family"});persist();rRecs(d);rSum();}
 function delR(d,i){
   const day=gday(d);const dy=day.receipts[i];
   if(dy&&dy.imgKey)sd(dy.imgKey);
@@ -388,16 +372,20 @@ function delR(d,i){
 }
 function rRecs(d){const el=document.getElementById("recs-"+d);if(el)el.innerHTML=recsHTML(d,(wd.days[d]||{}).receipts||[]);}
 function recsHTML(d,recs){
-  return recs.map((r,i)=>'<div style="padding:0 14px 10px 18px">'
-    +'<div style="display:flex;gap:6px;margin-bottom:6px"><div class="raccent"></div>'
-    +'<input class="rinp" style="flex:1" placeholder="Vendor name" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
-    +'<div style="display:flex;gap:6px;padding-left:9px">'
-    +'<input class="rinp" style="flex:1" type="number" inputmode="decimal" placeholder="$0.00" value="'+esc(String(r.amount||""))+'" oninput="uAmt(\''+d+'\','+i+',this.value)">'
-    +(r.imgKey&&sgr(r.imgKey)
-      ?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">'
-      :'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
-    +'<button class="bsm" style="background:var(--errlt);color:var(--err);padding:8px 12px;font-size:15px" onclick="delR(\''+d+'\','+i+')">&#x1F5D1;</button>'
-    +'</div></div>').join("");
+  return recs.map((r,i)=>{
+    const isLbr=r.account==="lumber";
+    return '<div style="padding:0 14px 10px 18px">'
+      +'<div style="display:flex;gap:6px;margin-bottom:6px"><div class="raccent"></div>'
+      +'<input class="rinp" style="flex:1" placeholder="Vendor name" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
+      +'<div style="display:flex;gap:6px;padding-left:9px">'
+      +'<input class="rinp" style="flex:1" type="number" inputmode="decimal" placeholder="$0.00" value="'+esc(String(r.amount||""))+'" oninput="uAmt(\''+d+'\','+i+',this.value)">'
+      +(r.imgKey&&sgr(r.imgKey)
+        ?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">'
+        :'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
+      +'<div class="lbr-chk'+(isLbr?" on":"")+'" title="'+(isLbr?"Lumber yard acct":"Family card (default)")+'" onclick="uAcct(\''+d+'\','+i+')">'+(isLbr?'&#x2713;':'')+'</div>'
+      +'<button class="bsm" style="background:var(--errlt);color:var(--err);padding:8px 12px;font-size:15px" onclick="delR(\''+d+'\','+i+')">&#x1F5D1;</button>'
+      +'</div></div>';
+  }).join("");
 }
 async function pickImg(d,i){
   const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
@@ -424,10 +412,10 @@ function sumHTML(){
   const days=wkDays(nav.ws);let th=0,tm=0;
   days.forEach(d=>{const x=wd.days[d]||{};th+=hrs(x.timeIn,x.timeOut);(x.receipts||[]).forEach(r=>tm+=parseFloat(r.amount||0));});
   th=+th.toFixed(2);tm=+tm.toFixed(2);
-  const lab=+(th*(nav.proj.rate||65)).toFixed(2),tot=+(lab+tm).toFixed(2);
+  const lab=+(th*(nav.proj.rate||45)).toFixed(2),tot=+(lab+tm).toFixed(2);
   if(th===0&&tm===0)return'<div id="wsum"></div>';
   return '<div id="wsum" class="sumcard"><div style="padding:12px 16px 8px">'
-    +(th>0?'<div class="sumrow"><span style="font-size:13px;color:var(--slate)">Labor ('+th+'h @ '+f$(nav.proj.rate||65)+'/hr)</span><span style="font-size:13px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+f$(lab)+'</span></div>':"")
+    +(th>0?'<div class="sumrow"><span style="font-size:13px;color:var(--slate)">Labor ('+th+'h @ '+f$(nav.proj.rate||45)+'/hr)</span><span style="font-size:13px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+f$(lab)+'</span></div>':"")
     +(tm>0?'<div class="sumrow"><span style="font-size:13px;color:var(--slate)">Materials</span><span style="font-size:13px;font-weight:700;color:var(--amber);font-variant-numeric:tabular-nums">'+f$(tm)+'</span></div>':"")
     +'</div><div class="sumrow tot"><span style="font-size:15px;font-weight:800;color:var(--pine)">Total Due</span><span style="font-size:18px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums">'+f$(tot)+'</span></div>'
     +'<div style="padding:0 16px 14px"><button class="btnp" style="background:var(--amber)" onclick="go(\'invoice\',{proj:nav.proj,wks:[nav.ws]})">Generate Invoice</button></div></div>';
@@ -456,9 +444,9 @@ function rWeek(a){
       +(hasData?'<button onclick="clearDay(\''+date+'\')" class="bsm" style="background:var(--errlt);color:var(--err);font-size:11px;padding:3px 8px">Clear</button>':"")
       +'</div>'
       +'<div class="trow">'
-      +'<input class="tinp" type="time" value="'+esc(day.timeIn||"")+'" onfocus="if(!this.value){this.value=\'07:00\';utIn(\''+date+'\',\'07:00\')}" oninput="utIn(\''+date+'\',this.value)">'
+      +'<input class="tinp" type="time" step="900" value="'+esc(day.timeIn||"")+'" onfocus="if(!this.value){this.value=\'07:00\';utIn(\''+date+'\',\'07:00\')}" oninput="utIn(\''+date+'\',this.value)">'
       +'<span class="tdash">&#8211;</span>'
-      +'<input class="tinp" type="time" value="'+esc(day.timeOut||"")+'" onfocus="if(!this.value){this.value=\'16:00\';utOut(\''+date+'\',\'16:00\')}" oninput="utOut(\''+date+'\',this.value)">'
+      +'<input class="tinp" type="time" step="900" value="'+esc(day.timeOut||"")+'" onfocus="if(!this.value){this.value=\'16:00\';utOut(\''+date+'\',\'16:00\')}" oninput="utOut(\''+date+'\',this.value)">'
       +(h>0?'<div class="ttot">'+h+'h</div>':"")
       +'</div>'
       +'<div id="recs-'+date+'">'+recsHTML(date,day.receipts||[])+'</div>'
@@ -492,7 +480,7 @@ function rList(a){
     let h=0,m=0;
     if(data.lumpSum){h=+(data.lumpSum.hours||0);m=+(data.lumpSum.materials||0);}
     else{Object.values(data.days||{}).forEach(d=>{h+=hrs(d.timeIn,d.timeOut);(d.receipts||[]).forEach(r=>m+=parseFloat(r.amount||0));});}
-    h=+h.toFixed(2);m=+m.toFixed(2);const lab=+(h*(nav.proj.rate||65)).toFixed(2);
+    h=+h.toFixed(2);m=+m.toFixed(2);const lab=+(h*(nav.proj.rate||45)).toFixed(2);
     const invd=isInvd(nav.proj.id,ws),isLump=!!data.lumpSum;
     html+='<div class="wkcard" id="wc-'+ws+'" onclick="togWk(\''+ws+'\')">'
       +'<div style="padding:12px 16px;display:flex;gap:12px;align-items:center">'
@@ -507,8 +495,7 @@ function rList(a){
       +(!isLump?'<button class="bsm" style="background:var(--paper);color:var(--slate);border:1px solid var(--border);font-size:11px" onclick="event.stopPropagation();wd=sg(K.wk(nav.proj.id,\''+ws+'\'),{days:{},notes:\'\'});go(\'week\',{proj:nav.proj,ws:\''+ws+'\'})">View</button>':"")
       +'</div></div></div></div>';
   });
-  html+='</div><div class="stickybot" id="ibar" style="display:none">'
-    +'<button class="btnp" onclick="genInv()">Generate Invoice (<span id="scount">0</span> weeks)</button></div>';
+  html+='</div><div class="stickybot" id="ibar" style="display:none"><button class="btnp" onclick="genInv()">Generate Invoice (<span id="scount">0</span> weeks)</button></div>';
   a.innerHTML=html;
 }
 function togWk(ws){
@@ -520,13 +507,38 @@ function togWk(ws){
   if(bar)bar.style.display=selWks.size>0?"block":"none";
   if(cnt)cnt.textContent=selWks.size;
 }
-function genInv(){if(selWks.size===0)return;markInvd(nav.proj.id,[...selWks]);go("invoice",{proj:nav.proj,wks:[...selWks]});}
+function genInv(){
+  if(selWks.size===0)return;
+  const ws=[...selWks];
+  markInvd(nav.proj.id,ws);
+  // Tally card charges for bookkeeping record
+  let famAmt=0,lbrAmt=0;
+  ws.forEach(w=>{
+    const data=sg(K.wk(nav.proj.id,w),{days:{},notes:""});
+    Object.values(data.days||{}).forEach(d=>{
+      (d.receipts||[]).forEach(r=>{
+        const a=parseFloat(r.amount||0);
+        if(r.account==="lumber")lbrAmt+=a;else famAmt+=a;
+      });
+    });
+    if(data.lumpSum)famAmt+=parseFloat(data.lumpSum.materials||0);
+  });
+  famAmt=+famAmt.toFixed(2);lbrAmt=+lbrAmt.toFixed(2);
+  if(famAmt>0||lbrAmt>0){
+    const cl=getCl(nav.proj.clientId);
+    const invDate=tod();
+    const invn="INV-"+invDate.replace(/-/g,"");
+    const rec={id:uid(),invn,invDate,clientName:cl.name||"",projName:nav.proj.name,famAmt,lbrAmt,famPaid:false,lbrPaid:false};
+    ss(K.crd,[...(sg(K.crd,[])||[]),rec]);
+  }
+  go("invoice",{proj:nav.proj,wks:ws});
+}
 
 // ── BUILD INVOICE DATA ─────────────────────────────────────────────────────
 function buildInvData(){
   const sws=[...nav.wks].sort();
   const cl=getCl(nav.proj.clientId);
-  const rate=nav.proj.rate||65;
+  const rate=nav.proj.rate||45;
   const wdata=sws.map(ws=>({ws,data:sg(K.wk(nav.proj.id,ws),{days:{},notes:""})}));
   const allDays=[],lumpWks=[],notesArr=[];
   wdata.forEach(({ws,data})=>{
@@ -602,7 +614,7 @@ function rInvoice(a){
     imgRecs.forEach((r,i)=>{html+='<div style="padding:12px 16px;'+(i>0?"border-top:1px solid var(--border)":"")+'"><div style="font-size:12px;color:var(--slate);margin-bottom:8px;font-weight:600">'+esc(r.vendor||"Receipt")+' &middot; '+fd(r.date)+' &middot; '+f$(parseFloat(r.amount||0))+'</div><img src="'+sgr(r.imgKey)+'" style="width:100%;border-radius:8px;border:1px solid var(--border)" alt="'+esc(r.vendor||"")+'"></div>';});
     html+='</div>';
   }
-  html+='<p style="text-align:center;font-size:12px;color:var(--slate);margin-top:12px">PDF downloads directly &middot; Print opens share dialog</p></div>';
+  html+='<p style="text-align:center;font-size:12px;color:var(--slate);margin-top:12px">PDF downloads directly &middot; Email opens share sheet</p></div>';
   a.innerHTML=html;
 }
 
@@ -700,70 +712,23 @@ async function emailInvoice(){
   const blob=doc.output('blob');
   const subject='Invoice for '+nav.proj.name+' \u2014 '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const file=new File([blob],invn+'.pdf',{type:'application/pdf'});
-
-  // iOS: use Web Share API — opens native share sheet with PDF attached
   if(navigator.canShare&&navigator.canShare({files:[file]})){
-    try{
-      await navigator.share({files:[file],title:subject});
-      return;
-    }catch(e){if(e.name==='AbortError')return;}
+    try{await navigator.share({files:[file],title:subject});return;}catch(e){if(e.name==='AbortError')return;}
   }
-
-  // Fallback: download PDF then open mailto with subject/to/bcc pre-filled
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download=invn+'.pdf';
   a.style.display='none';document.body.appendChild(a);a.click();document.body.removeChild(a);
   const to=cl.email||'';
   const params=['subject='+encodeURIComponent(subject),'bcc='+encodeURIComponent(DAN_EMAIL)];
-  setTimeout(()=>{ window.location.href='mailto:'+encodeURIComponent(to)+'?'+params.join('&'); },700);
+  setTimeout(()=>{window.location.href='mailto:'+encodeURIComponent(to)+'?'+params.join('&');},700);
   toast('PDF saved \u2014 opening Mail');
 }
 
-// ── PRINT ──────────────────────────────────────────────────────────────────
-function doPrint(){
-  const{allDays,labDays,th,lab,lumpWks,lumpHrs,lumpLab,lumpMat,allR,mat,laborTotal,tot,dr,invn,notesStr,rate,cl}=buildInvData();
-  const imgRecs=allR.filter(r=>r.imgKey&&sgr(r.imgKey));
-  let b='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+invn+'</title>'
-    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Arial,sans-serif;background:#fff;color:#1a1a1a;padding:32px;max-width:680px;margin:0 auto}'
-    +'.hdr{background:#1E3B2A;color:#F3EDE2;padding:24px 28px;border-radius:12px 12px 0 0}.hdr h1{font-size:22px;margin-bottom:8px}.hdr p{font-size:13px;line-height:1.9;color:#9BBFA9}'
-    +'.body{background:#fff;border:1px solid #D8D0C4;border-top:none;border-radius:0 0 12px 12px;padding:24px 28px}'
-    +'.meta{display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #D8D0C4}'
-    +'.sl{font-size:11px;font-weight:700;color:#5A6472;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px}'
-    +'.line{display:flex;justify-content:space-between;margin-bottom:6px;align-items:baseline}'
-    +'.sub{display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid #D8D0C4}'
-    +'.sep{height:1px;background:#D8D0C4;margin:16px 0}'
-    +'.tot{background:#1E3B2A;margin:20px -28px -24px;padding:18px 28px;border-radius:0 0 12px 12px;display:flex;justify-content:space-between;align-items:center}'
-    +'.ri{margin-top:28px}.ri h2{font-size:14px;font-weight:700;margin-bottom:16px}.ritem{margin-bottom:20px}'
-    +'.ritem .rm{font-size:12px;color:#5A6472;margin-bottom:8px;font-weight:600}.ritem img{width:100%;border-radius:8px;border:1px solid #D8D0C4}'
-    +'</style></head><body>'
-    +'<div class="hdr"><h1>'+esc(ME.name)+'</h1><p>'+esc(ME.line1)+'<br>'+esc(ME.phone)+'<br>Venmo: '+esc(ME.venmo)+' &nbsp;&middot;&nbsp; Zelle: '+esc(ME.zelle)+'</p></div>'
-    +'<div class="body"><div class="meta"><div><div style="font-size:11px;color:#5A6472;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Billed To</div>'
-    +'<div style="font-size:15px;font-weight:700">'+esc(cl.name||nav.proj.name)+'</div>'
-    +(cl.address?'<div style="font-size:12px;color:#5A6472">'+esc(cl.address)+'</div>':"")
-    +'<div style="font-size:12px;color:#5A6472;margin-top:2px">'+esc(nav.proj.name)+'</div></div>'
-    +'<div style="text-align:right"><div style="font-size:11px;color:#5A6472;margin-bottom:4px">'+esc(invn)+'</div><div style="font-size:13px">'+esc(dr)+'</div></div></div>';
-  if(labDays.length>0||lumpWks.length>0){
-    b+='<div class="sl">Labor</div>';
-    labDays.forEach(d=>{b+='<div class="line"><div><span style="font-size:13px;font-weight:600">'+esc(fdl(d.date))+'</span><span style="font-size:12px;color:#5A6472;margin-left:8px">'+(d.timeIn||'')+'\u2013'+(d.timeOut||'')+' \u00b7 '+d.h+'h</span></div><span style="font-size:13px;font-weight:700;color:#1E3B2A;font-variant-numeric:tabular-nums">'+f$(d.h*rate)+'</span></div>';});
-    lumpWks.forEach(w=>{b+='<div class="line"><div><span style="font-size:13px;font-weight:600">'+wkLabel(w.ws)+' (summary)</span><span style="font-size:12px;color:#5A6472;margin-left:8px">'+(w.hours||0)+'h'+(w.note?' \u00b7 '+esc(w.note):'')+'</span></div><span style="font-size:13px;font-weight:700;color:#1E3B2A;font-variant-numeric:tabular-nums">'+f$((w.hours||0)*rate)+'</span></div>';});
-    b+='<div class="sub"><span style="font-size:13px;color:#5A6472">Labor Subtotal ('+(+(th+lumpHrs).toFixed(2))+'h @ '+f$(rate)+'/hr)</span><span style="font-size:14px;font-weight:700;color:#1E3B2A">'+f$(laborTotal)+'</span></div>';
-  }
-  if((labDays.length>0||lumpWks.length>0)&&allR.length>0)b+='<div class="sep"></div>';
-  if(allR.length>0){
-    b+='<div class="sl">Materials</div>';
-    allR.forEach(r=>{b+='<div class="line"><div><span style="font-size:13px;font-weight:600">'+esc(r.vendor||'Receipt')+'</span><span style="font-size:12px;color:#5A6472;margin-left:8px">'+fd(r.date)+'</span></div><span style="font-size:13px;font-weight:700;color:#B87A1A;font-variant-numeric:tabular-nums">'+f$(parseFloat(r.amount||0))+'</span></div>';});
-    if(lumpMat>0)b+='<div class="line"><span style="font-size:13px;color:#5A6472">Backdated materials</span><span style="font-size:13px;font-weight:700;color:#B87A1A">'+f$(lumpMat)+'</span></div>';
-    b+='<div class="sub"><span style="font-size:13px;color:#5A6472">Materials Subtotal</span><span style="font-size:14px;font-weight:700;color:#B87A1A">'+f$(mat)+'</span></div>';
-  }
-  if(notesStr)b+='<div class="sep"></div><div class="sl">Notes</div><div style="font-size:13px;line-height:1.6;white-space:pre-wrap">'+esc(notesStr)+'</div>';
-  b+='<div class="tot"><span style="font-size:18px;font-weight:800;color:#F3EDE2">Invoice Total</span><span style="font-size:24px;font-weight:800;color:#F3EDE2;font-variant-numeric:tabular-nums">'+f$(tot)+'</span></div></div>';
-  if(imgRecs.length>0){
-    b+='<div class="ri"><h2>Receipts</h2>';
-    imgRecs.forEach(r=>{b+='<div class="ritem"><div class="rm">'+esc(r.vendor||'Receipt')+' \u00b7 '+fd(r.date)+' \u00b7 '+f$(parseFloat(r.amount||0))+'</div><img src="'+sgr(r.imgKey)+'" alt="'+esc(r.vendor||'')+'"></div>';});
-    b+='</div>';
-  }
-  b+='</body></html>';
-  window.open(URL.createObjectURL(new Blob([b],{type:'text/html'})),'_blank');
+// ── CARD RECORDS ───────────────────────────────────────────────────────────
+function payCard(id,type){
+  const recs=sg(K.crd,[])||[];
+  ss(K.crd,recs.map(r=>r.id===id?{...r,[type==="fam"?"famPaid":"lbrPaid"]:true}:r));
+  rDash(document.getElementById("app"));
 }
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
@@ -775,7 +740,7 @@ function calcDash(){
   projects.forEach(p=>{
     const keys=sl("carp-w-"+p.id+"__");
     const invdSet=new Set(getInvd(p.id));
-    const rate=p.rate||65;
+    const rate=p.rate||45;
     keys.forEach(k=>{
       const ws=k.split("__")[1];
       const data=sg(k,{days:{},notes:""});
@@ -800,6 +765,13 @@ function rDash(a){
   const recent=[...projects].filter(p=>p.lastOpened).sort((a,b)=>b.lastOpened.localeCompare(a.lastOpened)).slice(0,3);
   const activeProjs=projects.filter(p=>!p.archived);
 
+  // Card tracking
+  const crdRecs=sg(K.crd,[])||[];
+  const pendingCrd=crdRecs.filter(r=>(!r.famPaid&&r.famAmt>0)||(!r.lbrPaid&&r.lbrAmt>0));
+  const totalFamOwed=+crdRecs.reduce((s,r)=>s+(r.famPaid?0:r.famAmt),0).toFixed(2);
+  const totalLbrOwed=+crdRecs.reduce((s,r)=>s+(r.lbrPaid?0:r.lbrAmt),0).toFixed(2);
+  const totalOwed=+(totalFamOwed+totalLbrOwed).toFixed(2);
+
   let html='<div class="topbar"><button class="back" onclick="go(\'clients\')">&#8249;</button>'
     +'<div style="flex:1;font-size:18px;font-weight:800">Dashboard</div>'
     +gearBtn()+'</div>'
@@ -811,7 +783,29 @@ function rDash(a){
     +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Uninvoiced</div>'
     +'<div class="dash-num" style="color:'+(d.uninv>0?'var(--amber)':'var(--pine)')+'">'+f$(d.uninv)+'</div>'
     +'<div class="dash-sub">across '+d.uninvProjCount+' project'+(d.uninvProjCount!==1?'s':'')+'</div></div>'
-    +(recent.length>0
+    // Card owed section
+    +'<div class="dash-stat" style="padding:0;overflow:hidden;border-color:'+(totalOwed>0?'var(--err)':'var(--border)')+'">'
+    +'<div style="padding:14px 16px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">&#x1F4B3; To Pay Back</div>'
+    +'<div class="dash-num" style="color:'+(totalOwed>0?'var(--err)':'var(--pine)')+'">'+f$(totalOwed)+'</div>'
+    +(totalFamOwed>0||totalLbrOwed>0
+      ?'<div class="dash-sub">'+(totalFamOwed>0?f$(totalFamOwed)+' family card':'')+(totalFamOwed>0&&totalLbrOwed>0?' &middot; ':'')+( totalLbrOwed>0?f$(totalLbrOwed)+' lumber yard':'')+'</div>'
+      :'<div class="dash-sub">All clear</div>')
+    +'</div>'
+    +(pendingCrd.length>0
+      ?pendingCrd.map(r=>'<div class="crd-row">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:13px;font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.clientName)+' \u2014 '+esc(r.projName)+'</div>'
+        +'<div style="font-size:11px;color:var(--slate);margin-top:2px">'+esc(r.invn)+' &middot; '+fd(r.invDate)+'</div>'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">'
+        +(!r.famPaid&&r.famAmt>0?'<button class="bsm" style="background:var(--errlt);color:var(--err);font-size:11px;padding:4px 9px" onclick="payCard(\''+r.id+'\',\'fam\')">&#x1F4B3; '+f$(r.famAmt)+' &#x2713; Paid</button>':"")
+        +(!r.lbrPaid&&r.lbrAmt>0?'<button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:11px;padding:4px 9px" onclick="payCard(\''+r.id+'\',\'lbr\')">&#x1F3EA; '+f$(r.lbrAmt)+' &#x2713; Paid</button>':"")
+        +'</div></div>').join("")
+      :"")
+    +'</div>';
+
+  html+=(recent.length>0
       ?'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Jump Back In</div>'
         +recent.map(p=>{const cl=getCl(p.clientId);return'<div class="shortcut" onclick="openProj(\''+p.id+'\')">'
           +'<div><div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(p.name)+'</div>'
@@ -823,126 +817,4 @@ function rDash(a){
     +'<span>Year to Date</span><span style="font-size:18px;color:var(--slate)">'+(ytdOpen?'&#x25BE;':'&#x25B8;')+'</span></button>'
     +(ytdOpen?'<div style="padding:0 16px 14px;border-top:1px solid var(--border)">'
       +'<div style="display:flex;justify-content:space-between;margin-top:10px"><span style="font-size:13px;color:var(--slate)">Labor</span><span style="font-size:14px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+f$(d.ytdLab)+'</span></div>'
-      +'<div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:13px;color:var(--slate)">Materials</span><span style="font-size:14px;font-weight:700;color:var(--amber);font-variant-numeric:tabular-nums">'+f$(d.ytdMat)+'</span></div>'
-      +'<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span style="font-size:14px;font-weight:700;color:var(--ink)">Total</span><span style="font-size:16px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums">'+f$(d.ytdTot)+'</span></div>'
-      +'</div>':"")
-    +'</div>'
-    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">Add Backdated Week</div>'
-    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:12px">'
-    +'<div><label class="lbl">Project</label>'
-    +'<select class="inp" id="bd-proj" style="-webkit-appearance:none;appearance:none">'
-    +'<option value="">Select project...</option>'
-    +activeProjs.map(p=>{const cl=getCl(p.clientId);return'<option value="'+p.id+'">'+esc(cl.name||"")+' \u2014 '+esc(p.name)+'</option>';}).join("")
-    +'</select></div>'
-    +'<div><label class="lbl">Week Starting</label><input class="inp" id="bd-wk" type="date" value="'+wkStart(tod())+'"></div>'
-    +'<div style="display:flex;gap:10px">'
-    +'<div style="flex:1"><label class="lbl">Hours</label><input class="inp" id="bd-hrs" type="number" inputmode="decimal" placeholder="0" min="0"></div>'
-    +'<div style="flex:1"><label class="lbl">Materials ($)</label><input class="inp" id="bd-mat" type="number" inputmode="decimal" placeholder="0.00" min="0"></div>'
-    +'</div>'
-    +'<div><label class="lbl">Note (optional)</label><input class="inp" id="bd-note" type="text" placeholder="e.g. Framing rough-in week"></div>'
-    +'<button class="btnp" onclick="saveLump()">Save Backdated Entry</button>'
-    +'</div></div></div>';
-  a.innerHTML=html;
-}
-
-function saveLump(){
-  const pid=document.getElementById("bd-proj").value;
-  const rawWk=document.getElementById("bd-wk").value;
-  const hVal=parseFloat(document.getElementById("bd-hrs").value)||0;
-  const mVal=parseFloat(document.getElementById("bd-mat").value)||0;
-  const note=document.getElementById("bd-note").value.trim();
-  if(!pid){toast("Select a project");return;}
-  if(!rawWk){toast("Select a week");return;}
-  if(hVal===0&&mVal===0){toast("Enter hours or materials");return;}
-  const ws=wkStart(rawWk);
-  const existing=sg(K.wk(pid,ws),{days:{},notes:""});
-  ss(K.wk(pid,ws),{...existing,lumpSum:{hours:hVal,materials:mVal,note}});
-  toast("Entry saved for "+wkLabel(ws));
-  document.getElementById("bd-hrs").value="";
-  document.getElementById("bd-mat").value="";
-  document.getElementById("bd-note").value="";
-}
-
-// ── SETTINGS ───────────────────────────────────────────────────────────────
-function rSettings(a){
-  a.innerHTML='<div class="topbar"><button class="back" onclick="go(\'dash\')">&#8249;</button>'
-    +'<div style="flex:1;font-size:16px;font-weight:700">Sync Settings</div></div>'
-    +'<div class="bp">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Google Sheets Sync</div>'
-    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:14px">'
-    +'<div><label class="lbl">Apps Script URL</label>'
-    +'<input class="inp" id="surl" type="url" value="'+esc(syncUrl)+'" placeholder="https://script.google.com/macros/s/...">'
-    +'<div style="font-size:12px;color:var(--slate);margin-top:6px;line-height:1.5">Connects the app to your Google Sheet.</div></div>'
-    +'<button class="btnp" onclick="saveSyncUrl()">Save &amp; Test Connection</button>'
-    +'</div></div>'
-    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">One-Time Data Push</div>'
-    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
-    +'<div style="font-size:13px;color:var(--slate);line-height:1.5">If you have data on this device not yet in Sheets, push it up now.</div>'
-    +'<button class="btnp" style="background:var(--amber)" onclick="pushAll()">Push This Device\'s Data to Sheets</button>'
-    +'</div></div>'
-    +'</div>';
-}
-
-async function saveSyncUrl(){
-  const url=document.getElementById("surl").value.trim();
-  syncUrl=url;
-  localStorage.setItem("carp-sync-url",url);
-  toast("Testing connection...");
-  try{
-    const r=await fetch(url+"?action=getAll",{redirect:"follow"});
-    const d=await r.json();
-    toast(d.ok?"Connected \u2713":"Error in response — check script");
-  }catch{toast("Connection failed \u2014 check URL");}
-}
-
-async function pushAll(){
-  toast("Pushing to Sheets...");
-  const ok=await pushToSheets();
-  toast(ok?"All data pushed \u2713":"Push failed \u2014 check URL");
-}
-
-// ── BOOT ───────────────────────────────────────────────────────────────────
-async function boot(){
-  migrate();
-  if(syncUrl){
-    if(navigator.onLine){
-      document.getElementById("app").innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:14px;color:var(--slate);background:var(--cream)">'
-        +'<div style="font-size:40px">&#x1F528;</div>'
-        +'<div style="font-size:14px;font-weight:600;color:var(--pine)">Syncing...</div></div>';
-      await pullFromSheets();
-    }else{
-      toast("Offline \u2014 using local data");
-    }
-  }
-  clients=sg(K.cl,[])||[];
-  projects=sg(K.proj,[])||[];
-  const last=sg(K.last,null);
-  if(last){
-    const sevenAgo=new Date(Date.now()-7*864e5).toISOString();
-    const p=projects.find(x=>x.id===last.projectId&&!x.archived);
-    if(p&&last.ts&&last.ts>sevenAgo){
-      wd=sg(K.wk(p.id,wkStart(tod())),{days:{},notes:""});
-      go("week",{proj:p,ws:wkStart(tod())});
-      return;
-    }
-  }
-  go("clients");
-}
-
-// Re-sync automatically when coming back online
-window.addEventListener("online",async()=>{
-  toast("Back online \u2014 syncing...");
-  await pushToSheets();
-  await pullFromSheets();
-  toast("Synced \u2713");
-});
-
-// Register service worker for offline support
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("/Carpentry/sw.js").catch(e=>console.log("SW:",e));
-}
-
-boot();
-</script>
-</body>
-</html>
+      +'<div style="display:flex;justify-content:space-between;margin-top:6px"><span style="font-size:13px;color:var(--slate)">Materials</span><span style="font-size:1
