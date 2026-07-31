@@ -10,9 +10,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
-html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:#F3EDE2}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:#F3EDE2;overflow-x:hidden}
 html{background:#1E3B2A}
-#app{max-width:480px;margin:0 auto;min-height:100vh}
+#app{max-width:480px;margin:0 auto;min-height:100vh;overflow-x:hidden;width:100%}
 :root{--pine:#1E3B2A;--cream:#F3EDE2;--paper:#FDFAF5;--amber:#B87A1A;--amberlt:#F5E6C8;--ink:#1A1A1A;--slate:#5A6472;--border:#D8D0C4;--white:#FFFFFF;--err:#B33A2A;--errlt:#FDECEA;--green:#1A6B3C;--greenlt:#D4EDDA}
 .topbar{background:var(--pine);color:var(--cream);padding:14px 16px 12px;padding-top:calc(env(safe-area-inset-top, 0px) + 14px);position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.18);display:flex;align-items:center;gap:12px}
 .card{background:var(--paper);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden}
@@ -32,7 +32,7 @@ html{background:#1E3B2A}
 .dd{font-size:12px;color:var(--slate);flex:1}
 .dhr{font-size:13px;font-weight:700;color:var(--pine)}
 .trow{padding:10px 14px;display:flex;gap:8px;align-items:center}
-.tinp{flex:1;padding:9px 8px;border-radius:10px;border:1.5px solid var(--border);background:var(--white);font-size:15px;color:var(--ink);outline:none;-webkit-appearance:none;text-align:center;font-family:inherit}
+.tinp{flex:1;padding:9px 6px;border-radius:10px;border:1.5px solid var(--border);background:var(--white);font-size:14px;color:var(--ink);outline:none;-webkit-appearance:none;text-align:center;font-family:inherit}
 .tinp:focus{border-color:var(--pine)}
 .tdash{color:var(--slate);font-size:18px;flex-shrink:0}
 .ttot{min-width:44px;text-align:right;font-size:14px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums;flex-shrink:0}
@@ -60,7 +60,7 @@ html{background:#1E3B2A}
 .notes-area:focus{border-color:var(--pine)}
 .proj-row{display:flex;align-items:center;padding:10px 16px;border-top:1px solid var(--border);cursor:pointer;gap:10px}
 .proj-row:active{background:#f0ece4}
-.dash-stat{background:var(--paper);border-radius:14px;border:1px solid var(--border);padding:16px;margin-bottom:12px}
+.dash-stat{background:var(--paper);border-radius:14px;border:1px solid var(--border);padding:16px;margin-bottom:12px;width:100%}
 .dash-num{font-size:28px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums;letter-spacing:-0.5px}
 .dash-sub{font-size:13px;color:var(--slate);margin-top:6px}
 .shortcut{background:var(--paper);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
@@ -180,6 +180,8 @@ function render(){
     case"settings":rSettings(a);break;
     case"expenses":rExpenses(a);break;
     case"add-exp":rAddExp(a);break;
+    case"archived-clients":rArchivedClients(a);break;
+    case"uninvoiced":rUninvoiced(a);break;
   }
 }
 
@@ -191,7 +193,6 @@ function rClients(a){
   const ac=clients.filter(c=>!c.archived),arc=clients.filter(c=>c.archived);
   const cc=(c)=>{
     const cp=projects.filter(p=>p.clientId===c.id&&!p.archived);
-    const ap=projects.filter(p=>p.clientId===c.id&&p.archived);
     return '<div class="card'+(c.archived?' arc-card':'')+'"><div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
       +'<div><div style="font-size:15px;font-weight:800;color:var(--ink)">'+esc(c.name)+'</div>'
       +(c.address?'<div style="font-size:11px;color:var(--slate);margin-top:1px">'+esc(c.address)+'</div>':"")
@@ -204,7 +205,6 @@ function rClients(a){
         +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
         +'<button onclick="event.stopPropagation();go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;padding:2px 6px;font-size:12px">&#x22EE;</button>'
         +'</div>').join(""):'<div style="padding:10px 16px;font-size:13px;color:var(--slate);border-top:1px solid var(--border)">No active projects</div>')
-      +(ap.length>0?'<div style="padding:6px 16px;font-size:11px;color:var(--slate);border-top:1px solid var(--border)">'+ap.map(p=>'<span onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="color:var(--slate);text-decoration:underline;cursor:pointer;margin-right:10px">&#x1F4E6; '+esc(p.name)+'</span>').join("")+'</div>':"")
       +'<div style="padding:8px 16px;border-top:1px solid var(--border)"><button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button></div></div>';
   };
   a.innerHTML='<div class="topbar">'+dashBtn()
@@ -216,7 +216,7 @@ function rClients(a){
     +'<span style="font-size:18px">&#x1F9FE;</span><span style="font-size:14px;font-weight:700;color:var(--ink)">My Business Expenses</span>'
     +'<svg style="margin-left:auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>'
     +(ac.length===0&&arc.length===0?'<div class="empty"><div style="font-size:40px;margin-bottom:12px">&#x1F4C1;</div><div style="font-weight:700;margin-bottom:6px">No clients yet</div><div style="font-size:13px">Tap + to create your first client</div></div>':ac.map(cc).join(""))
-    +(arc.length>0?'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4E6; Archived ('+arc.length+')</div>'+arc.map(cc).join(""):"")
+    +(arc.length>0?'<button onclick="go(\'archived-clients\')" style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:11px 16px;width:100%;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;margin-top:4px;font-family:inherit"><span style="font-size:18px">&#x1F4E6;</span><span style="font-size:14px;font-weight:700;color:var(--ink)">Archived Clients</span><span style="font-size:12px;color:var(--slate);margin-left:2px">('+arc.length+')</span><svg style="margin-left:auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>':"") 
     +'</div>';
 }
 
@@ -354,6 +354,19 @@ function sumHTML(){
     +'<div style="padding:0 16px 14px"><button class="btnp" style="background:var(--amber)" onclick="go(\'invoice\',{proj:nav.proj,wks:[nav.ws]})">Generate Invoice</button></div></div>';
 }
 
+function timeOpts(sel){
+  let o='<option value="">--</option>';
+  for(let h=5;h<=21;h++){
+    for(let m of[0,15,30,45]){
+      const v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+      const lh=h>12?h-12:(h===0?12:h);
+      const l=lh+':'+String(m).padStart(2,'0')+(h>=12?' PM':' AM');
+      o+='<option value="'+v+'"'+(v===sel?' selected':'')+'>'+l+'</option>';
+    }
+  }
+  return o;
+}
+
 function rWeek(a){
   const cl=getCl(nav.proj.clientId),days=wkDays(nav.ws);
   let html='<div class="topbar"><button class="back" onclick="go(\'clients\')">&#8249;</button>'
@@ -373,9 +386,9 @@ function rWeek(a){
       +'<span class="dhr" id="h-'+date+'">'+(h>0?h+"h":"")+'</span>'
       +(hd?'<button onclick="clearDay(\''+date+'\')" class="bsm" style="background:var(--errlt);color:var(--err);font-size:11px;padding:3px 8px">Clear</button>':"")
       +'</div><div class="trow">'
-      +'<input class="tinp" type="time" step="900" value="'+esc(day.timeIn||"")+'" onfocus="if(!this.value){this.value=\'07:00\';utIn(\''+date+'\',\'07:00\')}" oninput="utIn(\''+date+'\',this.value)">'
+      +'<select class="tinp" onchange="utIn(\''+date+'\',this.value)">'+timeOpts(day.timeIn||'')+'</select>'
       +'<span class="tdash">&#8211;</span>'
-      +'<input class="tinp" type="time" step="900" value="'+esc(day.timeOut||"")+'" onfocus="if(!this.value){this.value=\'16:00\';utOut(\''+date+'\',\'16:00\')}" oninput="utOut(\''+date+'\',this.value)">'
+      +'<select class="tinp" onchange="utOut(\''+date+'\',this.value)">'+timeOpts(day.timeOut||'')+'</select>'
       +(h>0?'<div class="ttot">'+h+'h</div>':"")
       +'</div><div id="recs-'+date+'">'+recsHTML(date,day.receipts||[])+'</div>'
       +'<div style="margin:0 14px 12px"><button class="bsm" style="background:var(--amberlt);color:var(--amber);width:100%;padding:8px" onclick="addR(\''+date+'\')">+ Add Receipt</button></div></div>';
@@ -617,8 +630,8 @@ function rDash(a){
     +'<div class="bp">'
     +'<div class="dash-stat"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Last 30 Days</div>'
     +'<div class="dash-num">'+f$(d.tot30)+'</div><div class="dash-sub">'+f$(d.lab30)+' labor &middot; '+f$(d.mat30)+' materials &middot; '+d.h30+'h</div></div>'
-    +'<div class="dash-stat" style="border-color:'+(d.uninv>0?'var(--amber)':'var(--border)')+'">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Uninvoiced</div>'
+    +'<div class="dash-stat" style="cursor:pointer;border-color:'+(d.uninv>0?'var(--amber)':'var(--border)')+'" onclick="go(\'uninvoiced\')">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Uninvoiced <span style="font-size:10px;font-weight:600;color:var(--slate);opacity:.7">TAP TO VIEW ›</span></div>'
     +'<div class="dash-num" style="color:'+(d.uninv>0?'var(--amber)':'var(--pine)')+'">'+f$(d.uninv)+'</div>'
     +'<div class="dash-sub">across '+d.uninvProjCount+' project'+(d.uninvProjCount!==1?'s':'')+'</div></div>'
     +'<div class="dash-stat" style="padding:0;overflow:hidden;border-color:'+(totalOwed>0?'var(--err)':'var(--border)')+'">'
@@ -670,6 +683,97 @@ function saveLump(){
   ss(K.wk(pid,ws),{...existing,lumpSum:{hours:hVal,materials:mVal,note}});
   toast("Entry saved for "+wkLabel(ws));
   document.getElementById("bd-hrs").value="";document.getElementById("bd-mat").value="";document.getElementById("bd-note").value="";
+}
+
+function rUninvoiced(a){
+  const items=[];
+  projects.forEach(p=>{
+    if(p.archived||getCl(p.clientId).archived)return;
+    const invdSet=new Set(getInvd(p.id)),rate=p.rate||45,cl=getCl(p.clientId);
+    const uninvWks=[];
+    sl("carp-w-"+p.id+"__").forEach(k=>{
+      const ws=k.split("__")[1];if(invdSet.has(ws))return;
+      const data=sg(k,{days:{},notes:""});
+      let wh=0,wm=0;
+      if(data.lumpSum){wh=+(data.lumpSum.hours||0);wm=+(data.lumpSum.materials||0);}
+      else Object.values(data.days||{}).forEach(d=>{wh+=hrs(d.timeIn,d.timeOut);(d.receipts||[]).forEach(r=>wm+=parseFloat(r.amount||0));});
+      wh=+wh.toFixed(2);wm=+wm.toFixed(2);
+      if(wh>0||wm>0)uninvWks.push({ws,wh,wm,wLab:+(wh*rate).toFixed(2),wTot:+(wh*rate+wm).toFixed(2),isLump:!!data.lumpSum});
+    });
+    if(uninvWks.length>0){
+      uninvWks.sort((a,b)=>b.ws.localeCompare(a.ws));
+      items.push({p,cl,uninvWks,projTotal:+uninvWks.reduce((s,w)=>s+w.wTot,0).toFixed(2)});
+    }
+  });
+  items.sort((a,b)=>b.projTotal-a.projTotal);
+  const grandTotal=+items.reduce((s,i)=>s+i.projTotal,0).toFixed(2);
+
+  let html='<div class="topbar"><button class="back" onclick="go(\'dash\')">&#8249;</button>'
+    +'<div style="flex:1"><div style="font-size:16px;font-weight:800">Uninvoiced Work</div>'
+    +'<div style="font-size:11px;color:#9BBFA9;margin-top:1px">'+f$(grandTotal)+' outstanding</div></div></div>'
+    +'<div class="bp">';
+
+  if(items.length===0){
+    html+='<div class="empty"><div style="font-size:36px;margin-bottom:12px">&#x2705;</div><div style="font-weight:700;margin-bottom:6px">All caught up</div><div style="font-size:13px">No uninvoiced work</div></div>';
+  }else{
+    items.forEach(({p,cl,uninvWks,projTotal})=>{
+      html+='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 8px">'
+        +esc(cl.name||"")+' &mdash; '+esc(p.name)
+        +'<span style="float:right;font-variant-numeric:tabular-nums;color:var(--amber)">'+f$(projTotal)+'</span></div>'
+        +'<div class="card">';
+      uninvWks.forEach((w,i)=>{
+        html+='<div style="padding:11px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;align-items:center;gap:10px;cursor:pointer" onclick="wd=sg(K.wk(\''+p.id+'\',\''+w.ws+'\'),{days:{},notes:\'\'});go(\'week\',{proj:'+JSON.stringify(p)+',ws:\''+w.ws+'\'})">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:700;color:var(--ink)">'+wkLabel(w.ws)+(w.isLump?' <span style="font-size:10px;background:var(--amberlt);color:var(--amber);border-radius:4px;padding:1px 5px">SUMMARY</span>':'')+'</div>'
+          +'<div style="font-size:12px;color:var(--slate);margin-top:2px">'+(w.wh>0?w.wh+'h @ '+f$(p.rate||45)+'/hr':'')+(w.wh>0&&w.wm>0?' &middot; ':'')+(w.wm>0?f$(w.wm)+' materials':'')+'</div>'
+          +'</div>'
+          +'<div style="font-size:14px;font-weight:800;color:var(--pine);font-variant-numeric:tabular-nums;flex-shrink:0">'+f$(w.wTot)+'</div>'
+          +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+          +'</div>';
+      });
+      html+='</div>';
+    });
+  }
+  html+='</div>';
+  a.innerHTML=html;
+}
+
+function rArchivedClients(a){
+  const arc=clients.filter(c=>c.archived);
+  let html='<div class="topbar"><button class="back" onclick="go(\'clients\')">&#8249;</button>'
+    +'<div style="flex:1;font-size:16px;font-weight:700">Archived Clients</div></div>'
+    +'<div class="bp">';
+  if(arc.length===0){
+    html+='<div class="empty"><div style="font-size:36px;margin-bottom:12px">&#x1F4E6;</div><div style="font-weight:700;margin-bottom:6px">No archived clients</div></div>';
+  }else{
+    arc.forEach(c=>{
+      const allProjs=projects.filter(p=>p.clientId===c.id);
+      const activeProjs=allProjs.filter(p=>!p.archived);
+      const arcProjs=allProjs.filter(p=>p.archived);
+      html+='<div class="card arc-card"><div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">'
+        +'<div><div style="font-size:15px;font-weight:800;color:var(--ink)">'+esc(c.name)+'</div>'
+        +(c.address?'<div style="font-size:11px;color:var(--slate);margin-top:1px">'+esc(c.address)+'</div>':"")
+        +'<div style="font-size:11px;color:var(--slate);margin-top:3px;font-style:italic">Archived client</div></div>'
+        +'<button class="bsm" style="background:var(--paper);color:var(--slate);border:1px solid var(--border);font-size:11px" onclick="go(\'add-cl\',{ex:\''+c.id+'\'})">Edit</button></div>';
+      if(activeProjs.length>0){
+        html+='<div style="padding:6px 16px 4px;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border)">Active Projects</div>';
+        activeProjs.forEach(p=>{html+='<div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openProj(\''+p.id+'\')">'
+          +'<div style="font-size:14px;font-weight:700;color:var(--ink);flex:1">'+esc(p.name)+'</div>'
+          +'<button onclick="event.stopPropagation();go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;font-size:12px;padding:2px 6px">&#x22EE;</button>'
+          +'</div>';});
+      }
+      if(arcProjs.length>0){
+        html+='<div style="padding:6px 16px 4px;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;border-top:1px solid var(--border)">Archived Projects</div>';
+        arcProjs.forEach(p=>{html+='<div style="padding:8px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;opacity:0.6">'
+          +'<div style="font-size:13px;color:var(--slate);flex:1">&#x1F4E6; '+esc(p.name)+'</div>'
+          +'<button onclick="go(\'add-proj\',{ex:\''+p.id+'\',cid:\''+c.id+'\'})" style="background:none;border:none;color:var(--slate);cursor:pointer;font-size:12px;padding:2px 6px">&#x22EE;</button>'
+          +'</div>';});
+      }
+      html+='<div style="padding:8px 16px;border-top:1px solid var(--border)"><button class="bsm" style="background:var(--amberlt);color:var(--amber);font-size:12px;padding:6px 12px" onclick="go(\'add-proj\',{ex:null,cid:\''+c.id+'\'})">+ Add Project</button></div></div>';
+    });
+  }
+  html+='</div>';
+  a.innerHTML=html;
 }
 
 function rExpenses(a){
