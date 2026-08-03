@@ -889,6 +889,21 @@ function delExp(id){
   if(e&&e.imgKey)sd(e.imgKey);ss(K.exp,exps.filter(x=>x.id!==id));go("expenses");
 }
 
+async function hardRefresh(){
+  toast("Clearing cache\u2026");
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    if('caches' in window){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+    location.reload(true);
+  }catch(e){toast("Couldn\u2019t clear \u2014 try Safari settings");}
+}
+
 function rSettings(a){
   a.innerHTML='<div class="topbar"><button class="back" onclick="go(\'dash\')">&#8249;</button><div style="flex:1;font-size:16px;font-weight:700">Sync Settings</div></div>'
     +'<div class="bp"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">Google Sheets Sync</div>'
@@ -899,7 +914,12 @@ function rSettings(a){
     +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">One-Time Data Push</div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
     +'<div style="font-size:13px;color:var(--slate);line-height:1.5">If you have data on this device not yet in Sheets, push it up now.</div>'
-    +'<button class="btnp" style="background:var(--amber)" onclick="pushAll()">Push This Device\'s Data to Sheets</button></div></div></div>';
+    +'<button class="btnp" style="background:var(--amber)" onclick="pushAll()">Push This Device\'s Data to Sheets</button></div></div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">App Updates</div>'
+    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
+    +'<div style="font-size:13px;color:var(--slate);line-height:1.6">After uploading a new version to GitHub, tap here to clear the cached version and reload fresh.</div>'
+    +'<button class="btnp" style="background:var(--slate)" onclick="hardRefresh()">&#x21BB; Clear Cache &amp; Reload</button>'
+    +'</div></div></div>';
 }
 async function saveSyncUrl(){
   const url=document.getElementById("surl").value.trim();syncUrl=url;localStorage.setItem("carp-sync-url",url);toast("Testing connection...");
@@ -925,7 +945,11 @@ async function boot(){
   go("clients");
 }
 window.addEventListener("online",async()=>{toast("Back online \u2014 syncing...");await pushToSheets();await pullFromSheets();toast("Synced \u2713");});
-if("serviceWorker" in navigator){navigator.serviceWorker.register("/Carpentry/sw.js").catch(e=>console.log("SW:",e));}
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/Carpentry/sw.js")
+    .then(reg=>reg.update())
+    .catch(e=>console.log("SW:",e));
+}
 boot();
 </script>
 </body>
