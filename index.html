@@ -133,7 +133,7 @@ function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{} bgSync("
 function sd(k){try{localStorage.removeItem(k);}catch{} bgSync("delete",k,null);}
 
 const K={cl:"carp-cl",proj:"carp-proj",wk:(p,w)=>"carp-w-"+p+"__"+w,img:(i)=>"carp-img-"+i,
-  invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open",crd:"carp-crd",exp:"carp-exp"};
+  invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open",crd:"carp-crd",exp:"carp-exp",vnd:"carp-vnd"};
 
 const getInvd=(pid)=>sg(K.invd(pid),[])||[];
 const isInvd=(pid,ws)=>getInvd(pid).includes(ws);
@@ -291,7 +291,16 @@ function persist(){clearTimeout(saveT);saveT=setTimeout(()=>ss(K.wk(nav.proj.id,
 function utIn(d,v){gday(d).timeIn=v;persist();rHrs(d);rSum();}
 function utOut(d,v){gday(d).timeOut=v;persist();rHrs(d);rSum();}
 function rHrs(d){const el=document.getElementById("h-"+d);if(el){const x=wd.days[d]||{};const h=hrs(x.timeIn,x.timeOut);el.textContent=h>0?h+"h":"";}};
-function uVend(d,i,v){const day=gday(d);if(day.receipts[i])day.receipts[i].vendor=v;persist();}
+function uVend(d,i,v){
+  const day=gday(d);if(day.receipts[i])day.receipts[i].vendor=v;persist();
+  if(v&&v.trim().length>=2){
+    const vt=v.trim(),list=sg(K.vnd,[])||[];
+    const idx=list.findIndex(x=>x.toLowerCase()===vt.toLowerCase());
+    if(idx>=0)list.splice(idx,1);
+    list.unshift(vt);
+    ss(K.vnd,list.slice(0,60));
+  }
+}
 function uAmt(d,i,v){const day=gday(d);if(day.receipts[i])day.receipts[i].amount=v;persist();rSum();}
 function uNotes(v){wd.notes=v;persist();}
 function uAcct(d,i){const day=gday(d);if(day.receipts[i]){day.receipts[i].account=day.receipts[i].account==="lumber"?"family":"lumber";persist();rRecs(d);}}
@@ -312,7 +321,7 @@ function recsHTML(d,recs){
     const lbr=r.account==="lumber";
     return '<div style="padding:0 14px 10px 18px">'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><div class="raccent"></div>'
-      +'<input class="rinp" style="flex:1" placeholder="Vendor name" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
+      +'<input class="rinp" style="flex:1" placeholder="Vendor name" list="vnd-list" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
       +'<div style="display:flex;gap:6px;padding-left:9px">'
       +'<input class="rinp" style="flex:1" type="number" inputmode="decimal" placeholder="$0.00" value="'+esc(String(r.amount||""))+'" oninput="uAmt(\''+d+'\','+i+',this.value)">'
       +(r.imgKey&&sgr(r.imgKey)?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">':'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
@@ -396,6 +405,9 @@ function rWeek(a){
   html+='<div class="card"><div style="padding:10px 16px 4px;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px">Week Notes</div>'
     +'<div class="cbody" style="padding-top:8px"><textarea class="notes-area" placeholder="Notes about work done, materials, next steps..." oninput="uNotes(this.value)">'+esc(wd.notes||"")+'</textarea></div></div>';
   html+=sumHTML()+'</div>';
+  // Vendor autocomplete datalist — shared by all receipt inputs on this page
+  const vndList=sg(K.vnd,[])||[];
+  html+='<datalist id="vnd-list">'+vndList.map(v=>'<option value="'+esc(v)+'">').join('')+'</datalist>';
   a.innerHTML=html;
 }
 function cwk(n){const nw=shiftWk(nav.ws,n);wd=sg(K.wk(nav.proj.id,nw),{days:{},notes:""});go("week",{proj:nav.proj,ws:nw});}
@@ -444,6 +456,12 @@ function togWk(ws){
   if(bar)bar.style.display=selWks.size>0?"block":"none";
   if(cnt)cnt.textContent=selWks.size;
 }
+function genInvn(){
+  const yr=new Date().getFullYear().toString().slice(2);
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
+  let r='';for(let i=0;i<4;i++)r+=chars[Math.floor(Math.random()*chars.length)];
+  return'INV-'+yr+'-'+r;
+}
 function genInv(){
   if(selWks.size===0)return;
   const ws=[...selWks];
@@ -456,10 +474,10 @@ function genInv(){
   });
   famAmt=+famAmt.toFixed(2);lbrAmt=+lbrAmt.toFixed(2);
   if(famAmt>0||lbrAmt>0){
-    const cl=getCl(nav.proj.clientId),invDate=tod(),invn="INV-"+invDate.replace(/-/g,"");
+    const cl=getCl(nav.proj.clientId),invDate=tod(),invn=genInvn();
     ss(K.crd,[...(sg(K.crd,[])||[]),{id:uid(),invn,invDate,clientName:cl.name||"",projName:nav.proj.name,famAmt,lbrAmt,famPaid:false,lbrPaid:false}]);
   }
-  go("invoice",{proj:nav.proj,wks:ws});
+  go("invoice",{proj:nav.proj,wks:ws,invn:genInvn()});
 }
 
 function buildInvData(){
@@ -484,7 +502,7 @@ function buildInvData(){
   const mat=+(dayMat+lumpMat).toFixed(2),laborTotal=+(lab+lumpLab).toFixed(2),tot=+(laborTotal+mat).toFixed(2);
   const allDates=[...allDays.map(d=>d.date),...lumpWks.map(w=>w.ws)].sort();
   const dr=allDates.length===0?"":allDates.length===1?fd(allDates[0]):fd(allDates[0])+" \u2013 "+fd(allDates[allDates.length-1]);
-  const invn="INV-"+new Date().toISOString().slice(0,10).replace(/-/g,"");
+  if(!nav.invn)nav.invn=genInvn();const invn=nav.invn;
   return{allDays,labDays,th,lab,lumpWks,lumpHrs,lumpLab,lumpMat,allR,dayMat,mat,laborTotal,tot,dr,invn,notesStr:notesArr.filter(Boolean).join("\n\n"),rate,cl};
 }
 
@@ -574,20 +592,27 @@ async function buildPDFDoc(){
     const imgData=await Promise.all(imgRecs.map(r=>new Promise(res=>{const img=new Image();const src=sgr(r.imgKey);img.onload=()=>res({src,nw:img.naturalWidth,nh:img.naturalHeight,r});img.onerror=()=>res(null);img.src=src;})));
     imgData.filter(Boolean).forEach(({src,nw,nh,r})=>{doc.addPage();let py=20;doc.setTextColor(90,100,114);doc.setFontSize(8);doc.setFont('helvetica','bold');doc.text('RECEIPT',ml,py);py+=6;doc.setTextColor(26,26,26);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.text((r.vendor||'Receipt')+' \u00b7 '+fd(r.date)+' \u00b7 '+f$(parseFloat(r.amount||0)),ml,py);py+=8;const maxW=cw,maxH=220;let iw=maxW,ih=maxW*(nh/nw);if(ih>maxH){ih=maxH;iw=maxH*(nw/nh);}doc.addImage(src,'JPEG',ml+(cw-iw)/2,py,iw,ih);});
   }
-  return{doc,invn,cl};
+  return{doc,invn,cl,dr};
 }
 async function doPDF(){if(!window.jspdf){toast("PDF library not loaded");return;}toast("Building PDF...");const{doc,invn}=await buildPDFDoc();doc.save(invn+'.pdf');toast('PDF downloaded');}
 async function emailInvoice(){
   if(!window.jspdf){toast("PDF library not loaded");return;}
   toast("Preparing invoice...");
-  const{doc,invn,cl}=await buildPDFDoc();
+  const{doc,invn,cl,dr}=await buildPDFDoc();
   const blob=doc.output('blob');
-  const subject='Invoice for '+nav.proj.name+' \u2014 '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const file=new File([blob],invn+'.pdf',{type:'application/pdf'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:subject});return;}catch(e){if(e.name==='AbortError')return;}}
-  const a2=document.createElement('a');a2.href=URL.createObjectURL(blob);a2.download=invn+'.pdf';a2.style.display='none';document.body.appendChild(a2);a2.click();document.body.removeChild(a2);
+  const projLower=(nav.proj.name||'').toLowerCase();
+  const subject='Invoice \u2014 '+(nav.proj.name||'')+(dr?' \u2014 '+dr:'');
+  const body='Please see the attached invoice for the '+projLower+' project'+(dr?' from '+dr:'')+'.'+'\n\nThank you!\n\nDennis Winders';
+  const a2=document.createElement('a');
+  a2.href=URL.createObjectURL(blob);a2.download=invn+'.pdf';
+  a2.style.display='none';document.body.appendChild(a2);a2.click();document.body.removeChild(a2);
   const to=cl.email||'';
-  setTimeout(()=>{window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subject)+'&bcc='+encodeURIComponent(DAN_EMAIL);},700);
+  setTimeout(()=>{
+    window.location.href='mailto:'+encodeURIComponent(to)
+      +'?subject='+encodeURIComponent(subject)
+      +'&bcc='+encodeURIComponent(DAN_EMAIL)
+      +'&body='+encodeURIComponent(body);
+  },800);
   toast('PDF saved \u2014 opening Mail');
 }
 
