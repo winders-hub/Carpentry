@@ -320,12 +320,28 @@ function delR(d,i){
   day.receipts.splice(i,1);persist();rRecs(d);rSum();
 }
 function rRecs(d){const el=document.getElementById("recs-"+d);if(el)el.innerHTML=recsHTML(d,(wd.days[d]||{}).receipts||[]);}
+function toggleVndPick(recId){
+  const el=document.getElementById('vp-'+recId);
+  if(el)el.style.display=el.style.display==='none'?'flex':'none';
+}
+function fillVendor(d,i,v){
+  const day=gday(d);if(day.receipts[i]){day.receipts[i].vendor=v;persist();}
+  rRecs(d);
+  clearTimeout(vndLookT);vndLookT=setTimeout(()=>lookupRecMiles(d,i),100);
+}
 function recsHTML(d,recs){
+  const vList=sg(K.vnd,[])||[];
   return recs.map((r,i)=>{
     const lbr=r.account==="lumber";
     return '<div style="padding:0 14px 10px 18px">'
       +'<div style="display:flex;gap:6px;margin-bottom:6px"><div class="raccent"></div>'
-      +'<input class="rinp" style="flex:1" placeholder="Vendor name" list="vnd-list" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)"></div>'
+      +'<input class="rinp" style="flex:1" placeholder="Vendor name" list="vnd-list" value="'+esc(r.vendor||"")+'" oninput="uVend(\''+d+'\','+i+',this.value)">'
+      +(vList.length>0?'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:6px 10px;font-size:15px" onclick="toggleVndPick(\''+r.id+'\')" title="Recent vendors">&#x2630;</button>':"")
+      +'</div>'
+      +(vList.length>0?'<div id="vp-'+r.id+'" style="display:none;flex-wrap:wrap;gap:5px;padding:0 0 8px 9px">'
+        +vList.slice(0,12).map(v=>'<button class="bsm" style="background:var(--paper);border:1px solid var(--border);color:var(--ink);font-size:12px;padding:4px 10px" onclick="fillVendor(\''+d+'\','+i+',\''+esc(v)+'\')">'+esc(v)+'</button>').join('')
+        +'</div>'
+      :"")
       +'<div style="display:flex;gap:6px;padding-left:9px">'
       +'<input class="rinp" style="flex:1" type="number" inputmode="decimal" placeholder="$0.00" value="'+esc(String(r.amount||""))+'" oninput="uAmt(\''+d+'\','+i+',this.value)">'
       +(r.imgKey&&sgr(r.imgKey)?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">':'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
@@ -728,6 +744,15 @@ function saveLump(){
   document.getElementById("bd-hrs").value="";document.getElementById("bd-mat").value="";document.getElementById("bd-note").value="";
 }
 
+function openProjWeek(pid,ws){
+  const p=getProj(pid);if(!p.id)return;
+  projects=projects.map(x=>x.id===pid?{...x,lastOpened:new Date().toISOString()}:x);
+  ss(K.proj,projects);
+  localStorage.setItem(K.last,JSON.stringify({projectId:pid,ts:new Date().toISOString()}));
+  wd=sg(K.wk(pid,ws),{days:{},notes:""});
+  go("week",{proj:{...p,lastOpened:new Date().toISOString()},ws});
+}
+
 function rUninvoiced(a){
   const items=[];
   projects.forEach(p=>{
@@ -765,7 +790,7 @@ function rUninvoiced(a){
         +'<span style="float:right;font-variant-numeric:tabular-nums;color:var(--amber)">'+f$(projTotal)+'</span></div>'
         +'<div class="card">';
       uninvWks.forEach((w,i)=>{
-        html+='<div style="padding:11px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;align-items:center;gap:10px;cursor:pointer" onclick="wd=sg(K.wk(\''+p.id+'\',\''+w.ws+'\'),{days:{},notes:\'\'});go(\'week\',{proj:'+JSON.stringify(p)+',ws:\''+w.ws+'\'})">'
+        html+='<div style="padding:11px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openProjWeek(\''+p.id+'\',\''+w.ws+'\')">'
           +'<div style="flex:1;min-width:0">'
           +'<div style="font-size:13px;font-weight:700;color:var(--ink)">'+wkLabel(w.ws)+(w.isLump?' <span style="font-size:10px;background:var(--amberlt);color:var(--amber);border-radius:4px;padding:1px 5px">SUMMARY</span>':'')+'</div>'
           +'<div style="font-size:12px;color:var(--slate);margin-top:2px">'+(w.wh>0?w.wh+'h @ '+f$(p.rate||45)+'/hr':'')+(w.wh>0&&w.wm>0?' &middot; ':'')+(w.wm>0?f$(w.wm)+' materials':'')+'</div>'
