@@ -85,6 +85,7 @@ const ME={name:"Dennis Winders",line1:"12 Rogers St, Plymouth NH 03264",phone:"(
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DEFAULT_SYNC_URL="https://script.google.com/macros/s/AKfycbzcdj0ytpXspwHteqU2-o285rqEgjXlsbwSmHoskurNFPEwYaIKCDKNim38hb_FkAA/exec";
 const DAN_EMAIL="falby.daniel@gmail.com";
+const IRS_RATE=0.70; // 2025 IRS standard mileage rate $/mi — update each Jan
 const EXP_CATS=["Tools & Equipment","Vehicle & Travel","Home Office","Materials & Supplies","Insurance","Professional Development","Other"];
 
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -133,7 +134,8 @@ function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{} bgSync("
 function sd(k){try{localStorage.removeItem(k);}catch{} bgSync("delete",k,null);}
 
 const K={cl:"carp-cl",proj:"carp-proj",wk:(p,w)=>"carp-w-"+p+"__"+w,img:(i)=>"carp-img-"+i,
-  invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open",crd:"carp-crd",exp:"carp-exp",vnd:"carp-vnd"};
+  invd:(p)=>"carp-invd-"+p,last:"carp-last",ytd:"carp-ytd-open",crd:"carp-crd",exp:"carp-exp",vnd:"carp-vnd",
+  gc:"carp-geocache",mc:"carp-mi-cache",vg:"carp-vnd-geo",manmi:"carp-man-mi"};
 
 const getInvd=(pid)=>sg(K.invd(pid),[])||[];
 const isInvd=(pid,ws)=>getInvd(pid).includes(ws);
@@ -288,18 +290,20 @@ function delProj(id){
 
 function gday(d){if(!wd.days[d])wd.days[d]={timeIn:"",timeOut:"",receipts:[]};return wd.days[d];}
 function persist(){clearTimeout(saveT);saveT=setTimeout(()=>ss(K.wk(nav.proj.id,nav.ws),wd),600);}
-function utIn(d,v){gday(d).timeIn=v;persist();rHrs(d);rSum();}
+function utIn(d,v){gday(d).timeIn=v;persist();rHrs(d);rSum();if(v)lookupDayMiles(d);}
 function utOut(d,v){gday(d).timeOut=v;persist();rHrs(d);rSum();}
 function rHrs(d){const el=document.getElementById("h-"+d);if(el){const x=wd.days[d]||{};const h=hrs(x.timeIn,x.timeOut);el.textContent=h>0?h+"h":"";}};
+let vndLookT=null;
 function uVend(d,i,v){
   const day=gday(d);if(day.receipts[i])day.receipts[i].vendor=v;persist();
   if(v&&v.trim().length>=2){
     const vt=v.trim(),list=sg(K.vnd,[])||[];
     const idx=list.findIndex(x=>x.toLowerCase()===vt.toLowerCase());
     if(idx>=0)list.splice(idx,1);
-    list.unshift(vt);
-    ss(K.vnd,list.slice(0,60));
+    list.unshift(vt);ss(K.vnd,list.slice(0,60));
   }
+  clearTimeout(vndLookT);
+  if(v&&v.trim().length>=3)vndLookT=setTimeout(()=>lookupRecMiles(d,i),1600);
 }
 function uAmt(d,i,v){const day=gday(d);if(day.receipts[i])day.receipts[i].amount=v;persist();rSum();}
 function uNotes(v){wd.notes=v;persist();}
@@ -327,6 +331,9 @@ function recsHTML(d,recs){
       +(r.imgKey&&sgr(r.imgKey)?'<img class="rthumb" src="'+sgr(r.imgKey)+'" onclick="showImg(\''+r.imgKey+'\')" alt="">':'<button class="bsm" style="background:var(--amberlt);color:var(--amber);padding:8px 12px;font-size:15px" onclick="pickImg(\''+d+'\','+i+')">&#x1F4F7;</button>')
       +'<div class="lbr-chk'+(lbr?" on":"")+'" title="'+(lbr?"Lumber yard":"Family card")+'" onclick="uAcct(\''+d+'\','+i+')">'+(lbr?'&#x2713;':'')+'</div>'
       +'<button class="bsm" style="background:var(--errlt);color:var(--err);padding:8px 12px;font-size:15px" onclick="delR(\''+d+'\','+i+')">&#x1F5D1;</button>'
+      +'</div>'
+      +'<div id="mi-rec-'+r.id+'" style="padding:0 0 4px 33px">'
+      +(r.miles!==undefined?'<span style="font-size:11px;color:var(--slate)">&#x1F4CD; '+r.miles+' mi</span>':'')
       +'</div></div>';
   }).join("");
 }
@@ -399,7 +406,11 @@ function rWeek(a){
       +'<span class="tdash">&#8211;</span>'
       +'<select class="tinp" onchange="utOut(\''+date+'\',this.value)">'+timeOpts(day.timeOut||'')+'</select>'
       +(h>0?'<div class="ttot">'+h+'h</div>':"")
-      +'</div><div id="recs-'+date+'">'+recsHTML(date,day.receipts||[])+'</div>'
+      +'</div>'
+      +'<div id="mi-'+date+'" style="padding:0 14px 6px;min-height:20px">'
+      +(day.miles!==undefined?'<span style="font-size:11px;color:var(--slate)">&#x1F4CD; '+day.miles+' mi round trip</span>':'')
+      +'</div>'
+      +'<div id="recs-'+date+'">'+recsHTML(date,day.receipts||[])+'</div>'
       +'<div style="margin:0 14px 12px"><button class="bsm" style="background:var(--amberlt);color:var(--amber);width:100%;padding:8px" onclick="addR(\''+date+'\')">+ Add Receipt</button></div></div>';
   });
   html+='<div class="card"><div style="padding:10px 16px 4px;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px">Week Notes</div>'
@@ -409,6 +420,13 @@ function rWeek(a){
   const vndList=sg(K.vnd,[])||[];
   html+='<datalist id="vnd-list">'+vndList.map(v=>'<option value="'+esc(v)+'">').join('')+'</datalist>';
   a.innerHTML=html;
+  setTimeout(()=>{
+    wkDays(nav.ws).forEach(date=>{
+      const day=wd.days[date]||{};
+      if(day.timeIn&&day.miles===undefined)lookupDayMiles(date);
+      (day.receipts||[]).forEach((rec,i)=>{if(rec.vendor&&rec.miles===undefined)lookupRecMiles(date,i);});
+    });
+  },80);
 }
 function cwk(n){const nw=shiftWk(nav.ws,n);wd=sg(K.wk(nav.proj.id,nw),{days:{},notes:""});go("week",{proj:nav.proj,ws:nw});}
 
@@ -810,6 +828,8 @@ function rExpenses(a){
     +'<button class="bsm" style="background:var(--amber);color:white" onclick="go(\'add-exp\',{ex:null})">+ Add</button></div>'
     +'<div class="bp">';
   if(ytdTotal>0)html+='<div class="dash-stat" style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">YTD Business Expenses</div><div class="dash-num">'+f$(ytdTotal)+'</div><div class="dash-sub">Schedule C deductions this year</div></div>';
+  const ytdMi=calcYtdMiles(),miVal=+(ytdMi*IRS_RATE).toFixed(2);
+  if(ytdMi>0)html+='<div class="dash-stat" style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">&#x1F4CD; YTD Mileage</div><div class="dash-num">'+ytdMi+' mi</div><div class="dash-sub">'+f$(miVal)+' deduction at '+( IRS_RATE*100)+'¢/mi &middot; Schedule C line 9</div></div>';
   if(exps.length===0){
     html+='<div class="empty"><div style="font-size:36px;margin-bottom:12px">&#x1F9FE;</div><div style="font-weight:700;margin-bottom:6px">No expenses yet</div><div style="font-size:13px">Track tools, vehicle, home office &amp; more for Schedule C</div></div>';
   }else{
@@ -889,6 +909,168 @@ function delExp(id){
   if(e&&e.imgKey)sd(e.imgKey);ss(K.exp,exps.filter(x=>x.id!==id));go("expenses");
 }
 
+// ── Mileage engine ──────────────────────────────────────────────────────────
+async function nominatim(q){
+  await new Promise(r=>setTimeout(r,220));
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(q),{headers:{'User-Agent':'CarpentryApp/1.0'}});
+    const d=await r.json();
+    if(d&&d.length)return{lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};
+  }catch(e){console.log('Nominatim:',e);}
+  return null;
+}
+async function getCoords(addr){
+  const cache=sg(K.gc,{})||{},key=addr.toLowerCase().trim();
+  if(cache[key])return cache[key];
+  const c=await nominatim(addr);
+  if(c){const nc={...sg(K.gc,{})||{}};nc[key]=c;ss(K.gc,nc);}
+  return c;
+}
+async function getRoundTripMiles(destAddr){
+  if(!destAddr||!destAddr.trim())return null;
+  const dq=(destAddr.toUpperCase().includes(' NH')||destAddr.toUpperCase().includes('NEW HAMPSHIRE'))?destAddr:destAddr+', NH';
+  const cache=sg(K.mc,{})||{},key=dq.toLowerCase().trim();
+  if(key in cache)return cache[key];
+  const home=await getCoords(ME.line1);
+  const dest=await getCoords(dq);
+  const nc={...sg(K.mc,{})||{}};
+  if(!home||!dest){nc[key]=null;ss(K.mc,nc);return null;}
+  try{
+    const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+home.lng+','+home.lat+';'+dest.lng+','+dest.lat+'?overview=false');
+    const d=await r.json();
+    if(d.code==='Ok'){const mi=+(d.routes[0].distance/1609.34*2).toFixed(1);nc[key]=mi;ss(K.mc,nc);return mi;}
+  }catch(e){console.log('OSRM:',e);}
+  nc[key]=null;ss(K.mc,nc);return null;
+}
+async function lookupDayMiles(date){
+  const cl=getCl(nav.proj.clientId);
+  const el=document.getElementById('mi-'+date);
+  if(!cl.address){
+    if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; <span style="text-decoration:underline;cursor:pointer" onclick="go(\'add-cl\',{ex:\''+cl.id+'\'})">Add client address</span> for mileage</span>';
+    return;
+  }
+  if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; Calculating\u2026</span>';
+  const mi=await getRoundTripMiles(cl.address);
+  const day=gday(date);
+  if(mi!==null){
+    if(day.miles===undefined){day.miles=mi;persist();}
+    if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; '+mi+' mi round trip</span>';
+  }else{
+    if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; Route not found</span>';
+  }
+}
+async function lookupRecMiles(d,i){
+  const day=gday(d);const rec=day.receipts[i];
+  if(!rec||!rec.vendor||rec.vendor.trim().length<3)return;
+  const vgeo=sg(K.vg,{})||{},vkey=rec.vendor.toLowerCase().trim();
+  const el=document.getElementById('mi-rec-'+rec.id);
+  if(vgeo[vkey]){
+    const vd=vgeo[vkey];
+    if(vd.status==='found'||vd.status==='manual'){
+      if(rec.miles===undefined){rec.miles=vd.mi;persist();}
+      if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; '+vd.mi+' mi</span>';
+    }else{
+      if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; <span style="text-decoration:underline;cursor:pointer" onclick="showAddrInput(\''+rec.id+'\',\''+d+'\','+i+')">Add store address</span></span>';
+    }
+    return;
+  }
+  if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; Looking up\u2026</span>';
+  const mi=await getRoundTripMiles(rec.vendor.trim());
+  const vg=sg(K.vg,{})||{};
+  if(mi!==null){
+    vg[vkey]={status:'found',mi};ss(K.vg,vg);
+    if(rec.miles===undefined){rec.miles=mi;persist();}
+    if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; '+mi+' mi</span>';
+  }else{
+    vg[vkey]={status:'not-found'};ss(K.vg,vg);
+    if(el)el.innerHTML='<span style="font-size:11px;color:var(--slate)">&#x1F4CD; <span style="text-decoration:underline;cursor:pointer" onclick="showAddrInput(\''+rec.id+'\',\''+d+'\','+i+')">Add store address</span></span>';
+  }
+}
+function showAddrInput(recId,d,i){
+  const el=document.getElementById('mi-rec-'+recId);if(!el)return;
+  el.innerHTML='<div style="display:flex;gap:6px;padding-right:14px;margin-top:2px">'
+    +'<input class="rinp" style="flex:1;font-size:12px" id="ai-'+recId+'" placeholder="25 Main St, Laconia NH" type="text">'
+    +'<button class="bsm" style="background:var(--pine);color:white;font-size:11px;padding:5px 10px" onclick="setVndAddr(\''+d+'\','+i+',document.getElementById(\'ai-'+recId+'\').value)">Save</button>'
+    +'</div>';
+  setTimeout(()=>document.getElementById('ai-'+recId)?.focus(),50);
+}
+async function setVndAddr(d,i,addr){
+  if(!addr||!addr.trim())return;
+  toast('Looking up\u2026');
+  const mi=await getRoundTripMiles(addr);
+  const day=gday(d);const rec=day.receipts[i];if(!rec)return;
+  const vg=sg(K.vg,{})||{},vkey=rec.vendor.toLowerCase().trim();
+  if(mi!==null){
+    vg[vkey]={status:'manual',mi,addr};ss(K.vg,vg);
+    rec.miles=mi;persist();
+    toast('&#x1F4CD; '+mi+' mi saved');
+    rRecs(d);
+  }else{toast("Couldn\u2019t find that address \u2014 try again");}
+}
+function calcYtdMiles(){
+  const ytdStart=new Date().getFullYear()+'-01-01';
+  let mi=0;
+  projects.forEach(p=>{
+    sl('carp-w-'+p.id+'__').forEach(k=>{
+      if(k.split('__')[1]<ytdStart)return;
+      const data=sg(k,{days:{},notes:''});
+      Object.values(data.days||{}).forEach(d=>{
+        if(d.miles)mi+=d.miles;
+        (d.receipts||[]).forEach(r=>{if(r.miles)mi+=r.miles;});
+      });
+    });
+  });
+  (sg(K.manmi,[])||[]).filter(e=>e.date>=ytdStart).forEach(e=>mi+=e.totalMi);
+  return +mi.toFixed(1);
+}
+async function scanHistoricalMileage(){
+  toast('Scanning\u2026');
+  let dc=0,rc=0;const cliMi={};
+  for(const p of projects){
+    if(!(p.clientId in cliMi)){
+      const cl=getCl(p.clientId);
+      cliMi[p.clientId]=cl.address?await getRoundTripMiles(cl.address):null;
+    }
+    const cmi=cliMi[p.clientId];
+    for(const k of sl('carp-w-'+p.id+'__')){
+      const data=sg(k,{days:{},notes:''});let chg=false;
+      for(const[,day] of Object.entries(data.days||{})){
+        if(day.timeIn&&day.miles===undefined&&cmi!==null){day.miles=cmi;chg=true;dc++;}
+        for(const rec of(day.receipts||[])){
+          if(rec.vendor&&rec.miles===undefined){
+            const vg=sg(K.vg,{})||{},vk=rec.vendor.toLowerCase().trim();
+            if(vg[vk]?.mi!==undefined){rec.miles=vg[vk].mi;chg=true;rc++;}
+            else if(vg[vk]?.status!=='not-found'){
+              const mi=await getRoundTripMiles(rec.vendor.trim());
+              const nvg=sg(K.vg,{})||{};
+              if(mi!==null){nvg[vk]={status:'found',mi};ss(K.vg,nvg);rec.miles=mi;chg=true;rc++;}
+              else{nvg[vk]={status:'not-found'};ss(K.vg,nvg);}
+              await new Promise(r=>setTimeout(r,300));
+            }
+          }
+        }
+      }
+      if(chg)ss(k,data);
+    }
+  }
+  toast('Done \u2014 '+dc+' work days, '+rc+' receipts updated');
+}
+async function saveManualMiles(){
+  const cid=document.getElementById('mm-cl').value;
+  const days=parseFloat(document.getElementById('mm-days').value)||0;
+  if(!cid||days<=0){toast('Pick a client and enter days');return;}
+  const cl=getCl(cid);
+  if(!cl.address){toast('Add an address to '+cl.name+' first');return;}
+  toast('Calculating\u2026');
+  const mi=await getRoundTripMiles(cl.address);
+  if(!mi){toast("Couldn\u2019t calculate \u2014 check client address");return;}
+  const totalMi=+(mi*days).toFixed(1);
+  ss(K.manmi,[...(sg(K.manmi,[])||[]),{id:uid(),clientId:cid,clientName:cl.name||'',days,miPerDay:mi,totalMi,date:tod()}]);
+  document.getElementById('mm-days').value='';
+  document.getElementById('mm-cl').value='';
+  toast(totalMi+' mi saved ('+days+' days \u00d7 '+mi+' mi each way)');
+}
+
 async function hardRefresh(){
   toast("Clearing cache\u2026");
   try{
@@ -919,6 +1101,20 @@ function rSettings(a){
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
     +'<div style="font-size:13px;color:var(--slate);line-height:1.6">After uploading a new version to GitHub, tap here to clear the cached version and reload fresh.</div>'
     +'<button class="btnp" style="background:var(--slate)" onclick="hardRefresh()">&#x21BB; Clear Cache &amp; Reload</button>'
+    +'</div></div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4CD; Mileage</div>'
+    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
+    +'<div style="font-size:13px;color:var(--slate);line-height:1.6">Scan all past weeks and backfill mileage for every day you clocked in and every receipt with a vendor name. Safe to run multiple times.</div>'
+    +'<button class="btnp" style="background:var(--pine)" onclick="scanHistoricalMileage()">Calculate Mileage for Past Entries</button>'
+    +'</div></div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4CD; Add Pre-App Miles</div>'
+    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:12px">'
+    +'<div style="font-size:13px;color:var(--slate);line-height:1.5">Add days worked at a client before you started using this app.</div>'
+    +'<div><label class="lbl">Client</label><select class="inp" id="mm-cl" style="-webkit-appearance:none"><option value="">Select client\u2026</option>'
+    +clients.filter(c=>!c.archived).map(c=>'<option value="'+c.id+'">'+esc(c.name)+(c.address?'':' \u26a0\ufe0f no address')+'</option>').join('')
+    +'</select></div>'
+    +'<div><label class="lbl">Number of days worked</label><input class="inp" id="mm-days" type="number" inputmode="decimal" min="0.5" step="0.5" placeholder="e.g. 12"></div>'
+    +'<button class="btnp" onclick="saveManualMiles()">Save Miles</button>'
     +'</div></div></div>';
 }
 async function saveSyncUrl(){
