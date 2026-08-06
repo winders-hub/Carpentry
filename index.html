@@ -181,6 +181,9 @@ function render(){
     case"dash":rDash(a);break;
     case"settings":rSettings(a);break;
     case"expenses":rExpenses(a);break;
+    case"mileage-detail":rMileageDetail(a);break;
+    case"vendor-addresses":rVendorAddresses(a);break;
+    case"vendor-addr-search":rVendorAddrSearch(a);break;
     case"add-exp":rAddExp(a);break;
     case"archived-clients":rArchivedClients(a);break;
     case"uninvoiced":rUninvoiced(a);break;
@@ -844,6 +847,112 @@ function rArchivedClients(a){
   a.innerHTML=html;
 }
 
+function rMileageDetail(a){
+  const ytdStart=new Date().getFullYear()+'-01-01';
+  const clientDays=[],vendorRuns=[];
+
+  projects.forEach(p=>{
+    const cl=getCl(p.clientId);
+    sl('carp-w-'+p.id+'__').forEach(k=>{
+      const data=sg(k,{days:{},notes:''});
+      Object.entries(data.days||{}).forEach(([date,day])=>{
+        if(date<ytdStart)return;
+        if(day.timeIn&&day.miles)clientDays.push({projName:p.name,clientName:cl.name||'',projId:p.id,date,miles:day.miles});
+        (day.receipts||[]).forEach(r=>{if(r.miles&&r.miles>0)vendorRuns.push({vendor:r.vendor||'Receipt',date,miles:r.miles});});
+      });
+    });
+  });
+
+  const manualEntries=(sg(K.manmi,[])||[]).filter(e=>e.date>=ytdStart);
+
+  // Group client days by project
+  const byProj={};
+  clientDays.sort((a,b)=>a.date.localeCompare(b.date)).forEach(d=>{
+    const key=d.projId;
+    if(!byProj[key])byProj[key]={clientName:d.clientName,projName:d.projName,days:[],total:0};
+    byProj[key].days.push(d);byProj[key].total=+(byProj[key].total+d.miles).toFixed(1);
+  });
+
+  // Group vendor runs by vendor name
+  const byVendor={};
+  vendorRuns.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+    const key=r.vendor.toLowerCase().trim();
+    if(!byVendor[key])byVendor[key]={vendor:r.vendor,runs:[],total:0};
+    byVendor[key].runs.push(r);byVendor[key].total=+(byVendor[key].total+r.miles).toFixed(1);
+  });
+
+  const manMi=+manualEntries.reduce((s,e)=>s+e.totalMi,0).toFixed(1);
+  const clientMi=+clientDays.reduce((s,d)=>s+d.miles,0).toFixed(1);
+  const vendorMi=+vendorRuns.reduce((s,r)=>s+r.miles,0).toFixed(1);
+  const grandTotal=+(clientMi+vendorMi+manMi).toFixed(1);
+  const deduction=+(grandTotal*IRS_RATE).toFixed(2);
+
+  let html='<div class="topbar"><button class="back" onclick="go(\'expenses\')">&#8249;</button>'
+    +'<div style="flex:1"><div style="font-size:16px;font-weight:800">Mileage Breakdown</div>'
+    +'<div style="font-size:11px;color:#9BBFA9;margin-top:1px">'+new Date().getFullYear()+' YTD</div></div></div>'
+    +'<div class="bp">'
+    +'<div class="dash-stat" style="margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">&#x1F4CD; Total YTD Miles</div>'
+    +'<div class="dash-num">'+grandTotal+' mi</div>'
+    +'<div class="dash-sub">'+f$(deduction)+' deduction at '+(IRS_RATE*100)+'¢/mi</div>'
+    +'<div style="display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">'
+    +'<div><div style="font-size:12px;color:var(--slate)">Client days</div><div style="font-size:14px;font-weight:700;color:var(--pine)">'+clientMi+' mi</div></div>'
+    +'<div><div style="font-size:12px;color:var(--slate)">Supply runs</div><div style="font-size:14px;font-weight:700;color:var(--pine)">'+vendorMi+' mi</div></div>'
+    +(manMi>0?'<div><div style="font-size:12px;color:var(--slate)">Manual</div><div style="font-size:14px;font-weight:700;color:var(--pine)">'+manMi+' mi</div></div>':"")
+    +'</div></div>';
+
+  // Client days by project
+  if(Object.keys(byProj).length>0){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:4px 0 8px">Client Days</div>';
+    Object.values(byProj).forEach(proj=>{
+      html+='<div style="font-size:12px;font-weight:700;color:var(--slate);margin-bottom:6px">'+esc(proj.clientName)+' &mdash; '+esc(proj.projName)
+        +'<span style="float:right;font-variant-numeric:tabular-nums;color:var(--pine)">'+proj.total+' mi</span></div>'
+        +'<div class="card" style="margin-bottom:14px">';
+      proj.days.forEach((d,i)=>{
+        html+='<div style="padding:9px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;justify-content:space-between;align-items:center">'
+          +'<span style="font-size:13px;color:var(--ink)">'+fdl(d.date)+'</span>'
+          +'<span style="font-size:13px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+d.miles+' mi</span></div>';
+      });
+      html+='</div>';
+    });
+  }
+
+  // Vendor runs by vendor
+  if(Object.keys(byVendor).length>0){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:4px 0 8px">Supply Runs'
+      +'<span onclick="go(\'vendor-addresses\')" style="float:right;font-size:10px;text-transform:none;letter-spacing:0;color:var(--pine);cursor:pointer;text-decoration:underline;font-weight:600">Manage addresses ›</span></div>';
+    Object.values(byVendor).sort((a,b)=>b.total-a.total).forEach(v=>{
+      html+='<div style="font-size:12px;font-weight:700;color:var(--slate);margin-bottom:6px">'+esc(v.vendor)
+        +'<span style="float:right;font-variant-numeric:tabular-nums;color:var(--pine)">'+v.total+' mi</span></div>'
+        +'<div class="card" style="margin-bottom:14px">';
+      v.runs.forEach((r,i)=>{
+        html+='<div style="padding:9px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;justify-content:space-between;align-items:center">'
+          +'<span style="font-size:13px;color:var(--ink)">'+fdl(r.date)+'</span>'
+          +'<span style="font-size:13px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+r.miles+' mi</span></div>';
+      });
+      html+='</div>';
+    });
+  }
+
+  // Manual entries
+  if(manualEntries.length>0){
+    html+='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:4px 0 8px">Manual Entries</div>'
+      +'<div class="card" style="margin-bottom:14px">';
+    manualEntries.forEach((e,i)=>{
+      html+='<div style="padding:9px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;justify-content:space-between;align-items:center">'
+        +'<div><div style="font-size:13px;color:var(--ink)">'+esc(e.clientName)+'</div>'
+        +'<div style="font-size:11px;color:var(--slate)">'+e.days+' days &times; '+e.miPerDay+' mi &middot; added '+fd(e.date)+'</div></div>'
+        +'<span style="font-size:13px;font-weight:700;color:var(--pine);font-variant-numeric:tabular-nums">'+e.totalMi+' mi</span></div>';
+    });
+    html+='</div>';
+  }
+
+  if(grandTotal===0)html+='<div class="empty"><div style="font-size:36px;margin-bottom:12px">&#x1F4CD;</div><div style="font-weight:700;margin-bottom:6px">No mileage recorded yet</div><div style="font-size:13px">Miles will appear here as you log work days and receipts</div></div>';
+
+  html+='</div>';
+  a.innerHTML=html;
+}
+
 function rExpenses(a){
   const exps=(sg(K.exp,[])||[]).sort((a,b)=>b.date.localeCompare(a.date));
   const ytdStart=new Date().getFullYear()+'-01-01';
@@ -854,7 +963,7 @@ function rExpenses(a){
     +'<div class="bp">';
   if(ytdTotal>0)html+='<div class="dash-stat" style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">YTD Business Expenses</div><div class="dash-num">'+f$(ytdTotal)+'</div><div class="dash-sub">Schedule C deductions this year</div></div>';
   const ytdMi=calcYtdMiles(),miVal=+(ytdMi*IRS_RATE).toFixed(2);
-  if(ytdMi>0)html+='<div class="dash-stat" style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">&#x1F4CD; YTD Mileage</div><div class="dash-num">'+ytdMi+' mi</div><div class="dash-sub">'+f$(miVal)+' deduction at '+( IRS_RATE*100)+'¢/mi &middot; Schedule C line 9</div></div>';
+  if(ytdMi>0)html+='<div class="dash-stat" style="margin-bottom:14px;cursor:pointer" onclick="go(\'mileage-detail\')"><div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">&#x1F4CD; YTD Mileage <span style="font-size:10px;font-weight:600;opacity:.7">TAP TO VIEW ›</span></div><div class="dash-num">'+ytdMi+' mi</div><div class="dash-sub">'+f$(miVal)+' deduction at '+(IRS_RATE*100)+'¢/mi &middot; Schedule C line 9</div></div>';
   if(exps.length===0){
     html+='<div class="empty"><div style="font-size:36px;margin-bottom:12px">&#x1F9FE;</div><div style="font-weight:700;margin-bottom:6px">No expenses yet</div><div style="font-size:13px">Track tools, vehicle, home office &amp; more for Schedule C</div></div>';
   }else{
@@ -1096,6 +1205,147 @@ async function saveManualMiles(){
   toast(totalMi+' mi saved ('+days+' days \u00d7 '+mi+' mi each way)');
 }
 
+// ── Vendor address search ───────────────────────────────────────────────────
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=3958.8,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return +(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1);
+}
+async function getRoundTripMilesCoords(destLat,destLng){
+  const home=await getCoords(ME.line1);if(!home)return null;
+  try{
+    const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+home.lng+','+home.lat+';'+destLng+','+destLat+'?overview=false');
+    const d=await r.json();
+    if(d.code==='Ok')return+(d.routes[0].distance/1609.34*2).toFixed(1);
+  }catch(e){console.log('OSRM:',e);}
+  return null;
+}
+function backfillVendorMiles(vkey,mi){
+  let count=0;
+  projects.forEach(p=>{
+    sl('carp-w-'+p.id+'__').forEach(k=>{
+      const data=sg(k,{days:{},notes:''});let chg=false;
+      Object.values(data.days||{}).forEach(day=>{
+        (day.receipts||[]).forEach(rec=>{
+          if(rec.vendor&&rec.vendor.toLowerCase().trim()===vkey){rec.miles=mi;chg=true;count++;}
+        });
+      });
+      if(chg)ss(k,data);
+    });
+  });
+  return count;
+}
+
+function rVendorAddresses(a){
+  const vList=sg(K.vnd,[])||[],vgeo=sg(K.vg,{})||{};
+  let html='<div class="topbar"><button class="back" onclick="go(\'settings\')">&#8249;</button>'
+    +'<div style="flex:1;font-size:16px;font-weight:700">Vendor Addresses</div></div>'
+    +'<div class="bp">'
+    +'<div style="font-size:13px;color:var(--slate);margin-bottom:12px;line-height:1.5">Tap any vendor to search for its location. Confirmed addresses backfill miles on all past receipts for that vendor.</div>';
+  if(vList.length===0){
+    html+='<div class="empty"><div style="font-size:32px;margin-bottom:10px">&#x1F4CB;</div><div>No vendors saved yet — they\'ll appear here as you add receipts.</div></div>';
+  }else{
+    html+='<div class="card">';
+    vList.forEach((v,i)=>{
+      const vkey=v.toLowerCase().trim(),vd=vgeo[vkey];
+      const confirmed=vd&&(vd.status==='found'||vd.status==='manual');
+      const notFound=vd&&vd.status==='not-found';
+      let badge='',sub='';
+      if(confirmed){badge='<span style="font-size:13px;color:var(--green)">&#x2713;</span>';sub=esc((vd.displayName||vd.addr||'').substring(0,42))+' &middot; '+vd.mi+' mi';}
+      else if(notFound){badge='<span style="font-size:13px;color:var(--amber)">&#x26A0;</span>';sub='Not found — tap to search again';}
+      else{badge='<span style="font-size:13px;color:var(--border)">&#x25CB;</span>';sub='Tap to find location';}
+      html+='<div style="padding:12px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';display:flex;align-items:center;gap:12px;cursor:pointer" onclick="go(\'vendor-addr-search\',{vkey:\''+esc(vkey)+'\',vname:\''+esc(v)+'\'})">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(v)+'</div>'
+        +(sub?'<div style="font-size:12px;color:var(--slate);margin-top:2px">'+sub+'</div>':"")+'</div>'
+        +badge
+        +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>';
+    });
+    html+='</div>';
+  }
+  html+='</div>';a.innerHTML=html;
+}
+
+let vsrResults=[];
+function rVendorAddrSearch(a){
+  const vgeo=sg(K.vg,{})||{},existing=vgeo[nav.vkey];
+  let html='<div class="topbar"><button class="back" onclick="go(\'vendor-addresses\')">&#8249;</button>'
+    +'<div style="flex:1;font-size:16px;font-weight:700">'+esc(nav.vname)+'</div></div>'
+    +'<div class="bp">';
+  if(existing&&(existing.status==='found'||existing.status==='manual')){
+    html+='<div style="background:var(--greenlt);border:1px solid var(--green);border-radius:12px;padding:12px 16px;margin-bottom:14px">'
+      +'<div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px">CURRENT</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--ink)">'+esc((existing.displayName||existing.addr||'').substring(0,60))+'</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:3px">&#x1F4CD; '+existing.mi+' mi round trip</div>'
+      +'<div style="font-size:12px;color:var(--slate);margin-top:2px">Search below to update</div></div>';
+  }
+  html+='<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
+    +'<label class="lbl">Search</label>'
+    +'<input class="inp" id="vsi" type="text" value="'+esc(nav.vname)+'" placeholder="e.g. Home Depot Plymouth NH">'
+    +'<button class="btnp" onclick="runVendorSearch()">Search</button>'
+    +'</div></div>'
+    +'<div id="vsr"></div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">Or enter address directly</div>'
+    +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
+    +'<input class="inp" id="vmi" type="text" placeholder="e.g. 1 Home Depot Dr, Tilton NH">'
+    +'<button class="btnp" style="background:var(--slate)" onclick="useManualVendorAddr()">Use This Address</button>'
+    +'</div></div></div>';
+  a.innerHTML=html;vsrResults=[];
+}
+async function runVendorSearch(){
+  const q=document.getElementById('vsi')?.value?.trim();if(!q)return;
+  const el=document.getElementById('vsr');
+  if(el)el.innerHTML='<div style="padding:20px;text-align:center;font-size:13px;color:var(--slate)">Searching\u2026</div>';
+  try{
+    await new Promise(r=>setTimeout(r,220));
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=us&q='+encodeURIComponent(q),{headers:{'User-Agent':'CarpentryApp/1.0'}});
+    vsrResults=await r.json();
+    if(!vsrResults.length){if(el)el.innerHTML='<div style="padding:16px;font-size:13px;color:var(--slate);text-align:center">No results — try a broader search or use the address field below.</div>';return;}
+    const home=await getCoords(ME.line1);
+    let rhtml='<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:14px 0 8px">Results</div><div class="card">';
+    vsrResults.forEach((res,i)=>{
+      const lat=parseFloat(res.lat),lng=parseFloat(res.lon);
+      const dist=home?haversineKm(home.lat,home.lng,lat,lng):null;
+      const parts=res.display_name.split(',').map(s=>s.trim());
+      rhtml+='<div style="padding:13px 16px;'+(i>0?'border-top:1px solid var(--border)':'')+';cursor:pointer;display:flex;align-items:center;gap:10px" onclick="confirmVendorResult('+i+')">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--ink)">'+esc(parts[0])+'</div>'
+        +'<div style="font-size:12px;color:var(--slate);margin-top:2px">'+esc(parts.slice(1,3).join(', '))+'</div>'
+        +'</div>'
+        +(dist!==null?'<div style="font-size:12px;color:var(--slate);flex-shrink:0">'+dist+' mi away</div>':"")
+        +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--slate)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+        +'</div>';
+    });
+    rhtml+='</div>';
+    if(el)el.innerHTML=rhtml;
+  }catch(e){if(el)el.innerHTML='<div style="padding:16px;font-size:13px;color:var(--err);text-align:center">Search failed \u2014 check connection</div>';}
+}
+async function confirmVendorResult(idx){
+  const res=vsrResults[idx];if(!res)return;
+  toast('Calculating route\u2026');
+  const lat=parseFloat(res.lat),lng=parseFloat(res.lon);
+  const mi=await getRoundTripMilesCoords(lat,lng);
+  if(mi===null){toast('Route failed \u2014 try manual address');return;}
+  const parts=res.display_name.split(',').map(s=>s.trim());
+  const displayName=parts.slice(0,3).join(', ');
+  const vg=sg(K.vg,{})||{};
+  vg[nav.vkey]={status:'found',mi,displayName,addr:res.display_name};ss(K.vg,vg);
+  const count=backfillVendorMiles(nav.vkey,mi);
+  toast(mi+' mi saved \u00b7 '+count+' receipt'+(count!==1?'s':'')+' updated');
+  go('vendor-addresses');
+}
+async function useManualVendorAddr(){
+  const addr=document.getElementById('vmi')?.value?.trim();
+  if(!addr){toast('Enter an address');return;}
+  toast('Looking up\u2026');
+  const mi=await getRoundTripMiles(addr);
+  if(!mi){toast("Couldn\u2019t find that address \u2014 try again");return;}
+  const vg=sg(K.vg,{})||{};
+  vg[nav.vkey]={status:'manual',mi,displayName:addr,addr};ss(K.vg,vg);
+  const count=backfillVendorMiles(nav.vkey,mi);
+  toast(mi+' mi saved \u00b7 '+count+' receipt'+(count!==1?'s':'')+' updated');
+  go('vendor-addresses');
+}
+
 async function hardRefresh(){
   toast("Clearing cache\u2026");
   try{
@@ -1131,6 +1381,7 @@ function rSettings(a){
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:10px">'
     +'<div style="font-size:13px;color:var(--slate);line-height:1.6">Scan all past weeks and backfill mileage for every day you clocked in and every receipt with a vendor name. Safe to run multiple times.</div>'
     +'<button class="btnp" style="background:var(--pine)" onclick="scanHistoricalMileage()">Calculate Mileage for Past Entries</button>'
+    +'<button class="btnp" style="background:var(--slate)" onclick="go(\'vendor-addresses\')">&#x1F4CD; Manage Vendor Addresses</button>'
     +'</div></div>'
     +'<div style="font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.7px;margin:16px 0 8px">&#x1F4CD; Add Pre-App Miles</div>'
     +'<div class="card"><div class="cbody" style="display:flex;flex-direction:column;gap:12px">'
